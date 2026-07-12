@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THE SAB — Deployed Fighter Pilot RPG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="screen" width="960" height="624"></canvas>
+
+  <div id="hud">
+    <div class="statrow"><span class="statlabel hp">HEALTH</span><div class="bar"><div id="bar-hp" class="fill hp"></div></div></div>
+    <div class="statrow"><span class="statlabel sp">SPIRIT</span><div class="bar"><div id="bar-sp" class="fill sp"></div></div></div>
+    <div class="statrow"><span class="statlabel en">ENERGY</span><div class="bar"><div id="bar-en" class="fill en"></div></div></div>
+    <div class="statrow"><span class="statlabel mo">SQDN</span><div class="bar"><div id="bar-mo" class="fill mo"></div></div></div>
+    <div id="warn"></div>
+  </div>
+
+  <div id="clockbox">
+    <div id="day">DAY 1</div>
+    <div id="time">06:00</div>
+    <div id="sorties">SORTIES: 0</div>
+    <div id="quest"></div>
+  </div>
+
+  <div id="prompt"></div>
+  <div id="toast"></div>
+  <div id="hotbar"></div>
+
+  <div id="dialog">
+    <div id="dtext"></div>
+    <div id="dchoices"></div>
+    <div id="dmore">&#9660;</div>
+  </div>
+
+  <div id="creator">
+    <div id="cbox">
+      <h1>PILOT RECORD</h1>
+      <div class="cmain">
+        <div class="ccols">
+          <div class="crow" data-row="0">
+            <span class="clabel">CALLSIGN</span>
+            <input id="cs" maxlength="12" autocomplete="off" spellcheck="false" placeholder="VIPER">
+          </div>
+          <div class="crow opt" data-row="1">
+            <span class="clabel">CREW</span>
+            <button class="arr" data-d="-1">&#9664;</button><span class="cval" id="v-role"></span><button class="arr" data-d="1">&#9654;</button>
+          </div>
+          <div class="crow opt" data-row="2">
+            <span class="clabel">GENDER</span>
+            <button class="arr" data-d="-1">&#9664;</button><span class="cval" id="v-sex"></span><button class="arr" data-d="1">&#9654;</button>
+          </div>
+          <div class="crow opt" data-row="3">
+            <span class="clabel">HAIR</span>
+            <button class="arr" data-d="-1">&#9664;</button><span class="cval" id="v-hair"></span><button class="arr" data-d="1">&#9654;</button>
+          </div>
+          <div class="crow opt" data-row="4">
+            <span class="clabel">CLOTHES</span>
+            <button class="arr" data-d="-1">&#9664;</button><span class="cval" id="v-outfit"></span><button class="arr" data-d="1">&#9654;</button>
+          </div>
+          <div class="crow opt" data-row="5">
+            <span class="clabel">SHOES</span>
+            <button class="arr" data-d="-1">&#9664;</button><span class="cval" id="v-shoes"></span><button class="arr" data-d="1">&#9654;</button>
+          </div>
+          <div class="crow opt" data-row="6">
+            <span class="clabel">HAT</span>
+            <button class="arr" data-d="-1">&#9664;</button><span class="cval" id="v-hat"></span><button class="arr" data-d="1">&#9654;</button>
+          </div>
+        </div>
+        <div id="pvwrap"><canvas id="preview" width="16" height="16"></canvas></div>
+      </div>
+      <div class="crow deploy" data-row="7" id="deployrow">&#9658; DEPLOY</div>
+      <div id="chint">ARROWS — NAVIGATE &amp; CHANGE &nbsp;&nbsp; ENTER — DEPLOY</div>
+    </div>
+  </div>
+</div>
+
+<script src="js/sprites.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
