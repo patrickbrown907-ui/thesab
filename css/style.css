@@ -356,8 +356,8 @@ body {
 }
 
 #preview {
-  width: 112px;
-  height: 112px;
+  width: 80px;
+  height: 120px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
@@ -377,5 +377,167 @@ body {
   color: #5a6288;
   font-size: 7px;
   margin-top: 10px;
+  letter-spacing: 1px;
+}
+
+/* ---------- M menu (gear / bag / craft) ---------- */
+#menu, #chestui {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 24, 0.7);
+}
+
+#mbox {
+  background: #181c34;
+  border: 4px solid #d8c9a3;
+  border-radius: 6px;
+  box-shadow: 0 6px 0 rgba(0,0,0,0.5);
+  padding: 16px 20px 12px;
+  width: 560px;
+  min-height: 330px;
+}
+
+#mtabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.mtab {
+  flex: 1;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #9aa2c4;
+  background: #0e1122;
+  border: 2px solid #3a4468;
+  border-radius: 3px;
+  padding: 7px 0;
+  cursor: pointer;
+}
+
+.mtab.sel {
+  color: #ffd75e;
+  border-color: #ffd75e;
+  background: rgba(255, 215, 94, 0.08);
+}
+
+.mpanel { display: none; }
+.mpanel.sel { display: block; }
+
+#mgear {
+  display: none;
+  gap: 18px;
+}
+#mgear.sel { display: flex; }
+
+#mpvwrap {
+  width: 132px;
+  height: 132px;
+  background: #0e1122;
+  border: 3px solid #3a4468;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#mpreview {
+  width: 80px;
+  height: 120px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#mgearlist { flex: 1; }
+
+.grow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.grow .gl { color: #9aa2c4; letter-spacing: 1px; }
+.grow .gv { color: #f4e9c8; }
+
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8px;
+  padding: 4px 6px;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  color: #cfd6f4;
+  cursor: pointer;
+}
+.mrow.sel { border-color: #ffd75e; background: rgba(255, 215, 94, 0.08); }
+.mrow.dim { color: #5a6288; }
+.mrow canvas {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  flex-shrink: 0;
+}
+.mrow .mname { flex: 1; }
+.mrow .mqty { color: #9fd48a; }
+.mrow .mcost { color: #ffd75e; font-size: 7px; }
+.mrow .mdesc { color: #7a82a8; font-size: 7px; }
+.mrow .mdel {
+  color: #ff6b5e;
+  border: 1px solid #7a3a2a;
+  border-radius: 2px;
+  padding: 1px 4px;
+  font-size: 7px;
+  cursor: pointer;
+}
+
+#mhint {
+  text-align: center;
+  color: #5a6288;
+  font-size: 7px;
+  margin-top: 10px;
+  letter-spacing: 1px;
+  min-height: 9px;
+}
+#mhint.warn { color: #ff6b5e; }
+
+/* ---------- chest / storage UI ---------- */
+#cbox2 {
+  background: #181c34;
+  border: 4px solid #d8c9a3;
+  border-radius: 6px;
+  box-shadow: 0 6px 0 rgba(0,0,0,0.5);
+  padding: 16px 20px 12px;
+}
+
+.clabel2 {
+  color: #ffd75e;
+  font-size: 8px;
+  letter-spacing: 2px;
+  margin: 6px 0 6px;
+}
+
+.slotrow {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.slotrow .slot { background: #2a3050; border-color: #3a4468; }
+.slotrow.focus .slot.sel { border-color: #d13b2c; box-shadow: inset 0 0 0 2px #ff6b4a; }
+.slotrow:not(.focus) .slot.sel { border-color: #ffd75e; box-shadow: inset 0 0 0 2px rgba(255,215,94,0.5); }
+
+#chint2 {
+  text-align: center;
+  color: #5a6288;
+  font-size: 7px;
+  margin-top: 6px;
   letter-spacing: 1px;
 }

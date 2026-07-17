@@ -71,12 +71,14 @@
     bag: new Array(12).fill(null),      // slots: null or {id, n}
     bagSel: 0,
     groundItems: [],                    // daily field pickups on the exterior
-    pillWeek: -1, goLeft: 5, nogoLeft: 5,
+    pillWeek: -5, goLeft: 5, nogoLeft: 5,
     alcDay: 0, alcToday: 0, lockerDay: 0, mreDay: 0, cigDay: 0,
     deployEnd: DEPLOY_DAYS, extensions: 0,
     built: {},                 // MWR projects: {couch:true, ...}
     questStage: 0,             // 0 = meet HARD, 1 = couch quest, 2 = build board open
     gather: {},                // gather spot key -> last day used
+    junk: { day: 0, nodes: {} },   // junkyard salvage: 'x,y' -> hits used today
+    swing: null, shake: 0,         // hammer swing state + screen shake (transient)
     callDay: 0, movieDay: 0,
     duty: null,                // ground duty: {type:'ops'|'vault', done:false}
     sortieDay: 0,              // one sortie per day
@@ -85,7 +87,9 @@
     runNext: 0, runLock: 0, runsDone: 0, smugIntro: false,
     haul: [], drive: null, gate: null, scene: null,     // smuggling run state + cutscene backdrop
     attackAt: -1, alarm: null, sirenT: 0,               // Alarm Red rocket attacks
-    profileId: null                                     // active save profile
+    profileId: null,                                    // active save profile
+    placed: [],                                         // crafted objects placed in the world
+    carrying: null                                      // placed object being moved
   };
 
   const player = {
@@ -93,6 +97,22 @@
     dir: 'down', moving: false, animT: 0,
     frames: SPR.buildCharFrames(G.cfg)
   };
+  // generated sprite sheets (assets.js) replace procedural frames once loaded
+  // (a sheet may beat this script's parse — refresh now AND on every load)
+  function refreshPlayerFrames() {
+    player.frames = ASSETS.playerFor(G.cfg) || SPR.buildCharFrames(G.cfg);
+  }
+  refreshPlayerFrames();
+  ASSETS.onReady.push(refreshPlayerFrames);
+  // tile assets arriving after boot: rebuild prerendered maps (and keep builds)
+  ASSETS.onReady.push(() => {
+    WORLD.invalidate();
+    if (G.map) {
+      G.map = WORLD.get(G.map.key);
+      applyBuilds(G.map);
+      applyBuilds(WORLD.get('exterior'));
+    }
+  });
 
   const maam = () => G.cfg.sex === 1 ? 'ma\'am' : 'sir';
   const roleName = () => G.cfg.role === 1 ? 'WSO' : 'fighter pilot';
@@ -115,6 +135,33 @@
     keys[e.key] = true;
   });
   window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+  // left-click a salvage node next to you to swing the hammer at it
+  let lastCam = { camX: 0, camY: 0, offX: 0, offY: 0 };
+  el('screen').addEventListener('mousedown', e => {
+    if (e.button !== 0 || G.mode !== 'play') return;
+    audio();
+    const r = e.target.getBoundingClientRect();
+    const fx = (e.clientX - r.left) / r.width * FW;
+    const fy = (e.clientY - r.top) / r.height * FH;
+    const tx = ((fx - lastCam.offX + lastCam.camX) / T) | 0;
+    const ty = ((fy - lastCam.offY + lastCam.camY) / T) | 0;
+    const h = G.map.hot[tx + ',' + ty];
+    if (!h || h.action !== 'salvage') return;
+    if (!G.bag.some(s => s && s.id === 'hammer')) {
+      noBeep();
+      toast('You need your hammer for that.');
+      return;
+    }
+    if (Math.abs(tx - player.tx) > 1 || Math.abs(ty - player.ty) > 1) {
+      blip();
+      toast('Too far away — walk up to it and swing.');
+      return;
+    }
+    const dx = tx - player.tx, dy = ty - player.ty;
+    player.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+    startSwing(h, tx, ty);
+  });
 
   function dirFromKeys() {
     if (keys.ArrowUp || keys.w || keys.W) return 'up';
@@ -151,6 +198,13 @@
         if (k >= '1' && k <= '9') { G.bagSel = +k - 1; blip(); updateHotbar(); }
         if (k === '0') { G.bagSel = 9; blip(); updateHotbar(); }
         if (k === 'f' || k === 'F') useSelected();
+        if (k === 'm' || k === 'M') openMenu();
+        break;
+      case 'menu':
+        menuKey(k);
+        break;
+      case 'chest':
+        chestKey(k);
         break;
       case 'flight':
         if (k === ' ') fireFlare();
@@ -250,10 +304,19 @@
   let crIdx = 0, crTimer = null, crAnim = 0;
   let crFrames = null;
 
+  // with generated sheets, hair/outfit/shoes/hat (rows 3-6) no longer change
+  // the sprite — hide them and skip them in navigation
+  const crRows = () => ASSETS.playerM ? [0, 1, 2, 7] : [0, 1, 2, 3, 4, 5, 6, 7];
+
   function openCreator() {
     G.mode = 'create';
     crIdx = 0;
     ui.creator.style.display = 'flex';
+    const gen = !!ASSETS.playerM;
+    document.querySelectorAll('#creator .crow').forEach(r => {
+      const row = +r.dataset.row;
+      if (row >= 3 && row <= 6) r.style.display = gen ? 'none' : '';
+    });
     ui.cs.value = G.callsign === 'VIPER' ? '' : G.callsign;
     updateCreator();
     setTimeout(() => ui.cs.focus(), 0);
@@ -275,7 +338,7 @@
     el('v-outfit').textContent = SPR.OUTFITS[G.cfg.outfit].name;
     el('v-shoes').textContent = SPR.SHOES[G.cfg.shoes][0];
     el('v-hat').textContent = SPR.HATS[G.cfg.hat];
-    crFrames = SPR.buildCharFrames(G.cfg);
+    crFrames = ASSETS.playerFor(G.cfg) || SPR.buildCharFrames(G.cfg);
     drawPreview();
   }
 
@@ -285,7 +348,7 @@
     const dir = dirs[Math.floor(crAnim / 8) % 4];
     const frame = crFrames[dir][crAnim % 4];
     const px = ui.preview.getContext('2d');
-    px.clearRect(0, 0, 16, 16);
+    px.clearRect(0, 0, 16, SPR.CHAR_H);
     px.drawImage(frame, 0, 0);
   }
 
@@ -299,14 +362,17 @@
   }
 
   function creatorKey(k) {
+    const rows = crRows();
+    const step = d => {
+      const i = Math.max(0, rows.indexOf(crIdx));
+      crIdx = rows[(i + d + rows.length) % rows.length];
+      if (crIdx === 0) { ui.cs.focus(); }
+      blip(); updateCreator();
+    };
     if (k === 'ArrowUp' || k === 'w' || k === 'W') {
-      crIdx = (crIdx + 7) % 8;
-      if (crIdx === 0) { ui.cs.focus(); }
-      blip(); updateCreator();
+      step(-1);
     } else if (k === 'ArrowDown' || k === 's' || k === 'S') {
-      crIdx = (crIdx + 1) % 8;
-      if (crIdx === 0) { ui.cs.focus(); }
-      blip(); updateCreator();
+      step(1);
     } else if (k === 'ArrowLeft' || k === 'a' || k === 'A') {
       cycleOpt(crIdx, -1);
     } else if (k === 'ArrowRight' || k === 'd' || k === 'D') {
@@ -328,7 +394,7 @@
     const cs = ui.cs.value.trim().toUpperCase().slice(0, 12);
     G.callsign = cs || 'VIPER';
     closeCreator();
-    player.frames = SPR.buildCharFrames(G.cfg);
+    refreshPlayerFrames();
     G.profileId = newProfileId();   // fresh pilot, fresh save slot
     newGame();
   }
@@ -594,8 +660,65 @@
            'The DFAC drama never disappoints. Apparently someone took the last omelet.']);
     },
     cookTalk() {
-      say(['SGT Cole: "Hot chow at the line, cold soda in the cooler."',
+      say(['Cheesy Habibi: "Hot chow at the line, cold soda in the cooler."',
            '"Eat before you fly. I\'m not scraping you off a runway on an empty stomach."']);
+    },
+    salvage(h) { doSalvage(h); },
+    crocTalk() {
+      const c = G.croc;
+      if (!c.intro) {
+        c.intro = true;
+        c.stockDay = G.day;
+        addItem('coffee', 3);
+        say(['CROC: "Hey! New face. They call me CROC — backseater, coffee connoisseur, family man."',
+             '"My wife and kids have never seen where I work. I\'m saving up to fly them out for a real vacation."',
+             '"I import the best local coffee grounds on base. Problem is, I fly too much to sell it."',
+             '"So here\'s the plan: a COFFEE STAND. I supply the grounds, you run the storefront."',
+             '"Scrounge WOOD x8 and SCRAP x4, craft the stand (M menu), and set it up outside."',
+             '"Stock it with my coffee and the customers will find YOU. This base runs on caffeine."',
+             '* QUEST STARTED: Vacation Fund — build CROC\'s coffee stand *',
+             '(CROC\'s Coffee x3 added. He restocks you every 2 days.)'], () => save());
+        return;
+      }
+      if (c.fund >= 100) {
+        if (!c.done) {
+          c.done = true;
+          addStats({ sp: 15 });
+          addMorale(10);
+          say(['CROC is holding a printout of flight confirmations, grinning like a madman.',
+               '"THEY\'RE COMING! Flights booked — the beach resort, all of it. Because of you, habibi."',
+               '"You ever need anything — coffee, intel, a backseater who owes you forever — you got it."',
+               '* QUEST COMPLETE: Vacation Fund — CROC\'s family is coming! (+Spirit, +Morale) *'], () => save());
+        } else {
+          say(['CROC: "Family lands next rotation. My kid wants to see the jets. OBVIOUSLY."',
+               '"Keep the stand running if you want, friend. The base needs you. CAFFEINE needs you."']);
+        }
+        return;
+      }
+      const lines = [];
+      if (G.day >= c.stockDay + 2) {
+        c.stockDay = G.day;
+        addItem('coffee', 3);
+        lines.push('CROC: "Fresh grounds just came in — three bags, top-shelf stuff."',
+                   '(CROC\'s Coffee x3 added.)');
+      } else {
+        lines.push('CROC: "No fresh grounds today — supply flight comes every couple days."');
+      }
+      const stand = theStand();
+      const hasStandItem = countItem('coffeestand') > 0 || (G.carrying && G.carrying.id === 'coffeestand');
+      if (!stand && hasStandItem) {
+        lines.push('"You BUILT it! Now set it up outside — somewhere with foot traffic, habibi."');
+      } else if (!stand) {
+        lines.push('"Still need that stand: WOOD x8, SCRAP x4, then craft it at the M menu."',
+                   '"Pallet stacks for wood, junk piles for scrap. You know the drill."');
+      } else if (!(stand.stock > 0)) {
+        lines.push('"The stand\'s up but it\'s EMPTY. Stock it with my coffee — face it, press F."',
+                   '"Fund\'s at ' + c.fund + '%. The ocean isn\'t going to smell itself."');
+      } else {
+        lines.push('"Stand\'s stocked with ' + stand.stock + ' bag' + (stand.stock > 1 ? 's' : '') + ' and word is spreading."',
+                   '"Vacation fund: ' + c.fund + '%. I can almost smell the ocean, habibi."');
+      }
+      say(lines, () => save());
     },
     treadmill() {
       ask('Run on the treadmill? (45 min, -Energy)', ['Get after it', 'Skip it'], i => {
@@ -1058,13 +1181,22 @@
     cigs:     { name: 'Cigarette',       fx: { sp: 10,  hp: -5, hu: -5 },          txt: 'Terrible for you. Great for morale. Doc sighs somewhere.' },
     liquor:   { name: 'Whiskey',         fx: { sp: 18,  en: -12, hp: -3 },         txt: 'Local "whiskey." The label is just a picture of an eagle.' },
     kebab:    { name: 'Goat Kebab',      fx: { hu: -35, sp: 8, hp: 3 },            txt: 'Char-grilled by the roadside. Life-changing.' },
-    // building materials — no fx, big stacks
-    wood:     { name: 'Wood',        stack: 50, txt: 'Pallet lumber. The base runs on it.' },
-    scrap:    { name: 'Scrap Metal', stack: 50, txt: 'One man\'s junk is another man\'s bar stool.' },
-    elec:     { name: 'Electronics', stack: 50, txt: 'Circuit boards of questionable provenance.' },
-    cable:    { name: 'Cables',      stack: 50, txt: 'Definitely not from the comm closet. Definitely.' }
+    coffee:   { name: 'CROC\'s Coffee',  txt: 'Premium local grounds. Stock the coffee stand with it — face the stand, press F.' },
+    // tools — one per pilot, can't be trashed
+    hammer:   { name: 'Hammer',      tool: true, stack: 1, txt: 'Your salvage hammer. Swing it at junkyard nodes (F or left-click).' },
+    // building materials — no fx
+    wood:     { name: 'Wood',        txt: 'Pallet lumber. The base runs on it.' },
+    scrap:    { name: 'Scrap Metal', txt: 'One man\'s junk is another man\'s bar stool.' },
+    elec:     { name: 'Electronics', txt: 'Circuit boards of questionable provenance.' },
+    cable:    { name: 'Cables',      txt: 'Definitely not from the comm closet. Definitely.' },
+    // craftables — place with F while selected
+    chest:      { name: 'Storage Chest', place: true, txt: 'Face a clear tile and press F to place it.' },
+    footlocker: { name: 'Footlocker',    place: true, txt: 'Face a clear tile and press F to place it.' },
+    sign:       { name: 'Morale Sign',   place: true, txt: 'Face a clear tile and press F to place it.' },
+    chair:      { name: 'Camp Chair',    place: true, txt: 'Face a clear tile and press F to place it.' },
+    coffeestand: { name: 'Coffee Stand', place: true, txt: 'CROC\'s master plan. Face a clear tile OUTSIDE and press F to set up shop.' }
   };
-  const STACK_MAX = 9;
+  const STACK_MAX = 99;
   const stackOf = id => ITEMS[id].stack || STACK_MAX;
 
   let toastTimer = null;
@@ -1084,25 +1216,30 @@
     return parts.join(' ');
   }
 
-  function addItem(id, n) {
-    n = n || 1;
+  // generic stack-merge add for any container (bag, chest, ...)
+  function addToContainer(arr, id, n) {
     const max = stackOf(id);
     let added = 0;
-    for (let i = 0; i < G.bag.length && added < n; i++) {
-      const s = G.bag[i];
+    for (let i = 0; i < arr.length && added < n; i++) {
+      const s = arr[i];
       if (s && s.id === id && s.n < max) {
         const take = Math.min(n - added, max - s.n);
         s.n += take; added += take;
       }
     }
-    for (let i = 0; i < G.bag.length && added < n; i++) {
-      if (!G.bag[i]) {
+    for (let i = 0; i < arr.length && added < n; i++) {
+      if (!arr[i]) {
         const take = Math.min(n - added, max);
-        G.bag[i] = { id, n: take }; added += take;
+        arr[i] = { id, n: take }; added += take;
       }
     }
-    if (added > 0) updateHotbar();
     return added;   // how many actually fit
+  }
+
+  function addItem(id, n) {
+    const added = addToContainer(G.bag, id, n || 1);
+    if (added > 0) updateHotbar();
+    return added;
   }
 
   function countItem(id) {
@@ -1125,6 +1262,29 @@
     const s = G.bag[G.bagSel];
     if (!s) { noBeep(); return; }
     const it = ITEMS[s.id];
+    if (it.place) {           // craftable: place it at the facing tile
+      placeFromBag(s.id);
+      return;
+    }
+    if (s.id === 'hammer') {  // tool: swing at a salvage node you're facing
+      const [fx, fy] = facingTile();
+      const h = G.map.hot[fx + ',' + fy];
+      if (h && h.action === 'salvage') { doSalvage(h); return; }
+      blip();
+      toast('Nothing here worth hammering. The junkyard, on the other hand...');
+      return;
+    }
+    if (s.id === 'coffee') {  // stock the coffee stand you're facing
+      const [fx, fy] = facingTile();
+      const po = placedAt(G.map.key, fx, fy);
+      if (po && po.id === 'coffeestand') { stockStand(po, s.n); return; }
+      const hasStandItem = countItem('coffeestand') > 0 || (G.carrying && G.carrying.id === 'coffeestand');
+      blip();
+      toast(theStand() ? 'Take it to the coffee stand — face it, press F.'
+            : hasStandItem ? 'Set the coffee stand up outside first.'
+            : 'CROC\'s plan needs a coffee stand — craft one at the M menu.');
+      return;
+    }
     if (!it.fx) {
       toast(it.name + ' — building material. Take it to the MWR build board.');
       blip();
@@ -1140,11 +1300,55 @@
 
   /* ---------------- hotbar UI ---------------- */
   const slotEls = [];
+  let dragFrom = -1, dragGhost = null, didDrag = false, dragStart = null;
+
+  // move/merge a stack between two hotbar slots
+  function moveBagSlot(a, b) {
+    const sa = G.bag[a], sb = G.bag[b];
+    if (!sa || a === b) return;
+    if (sb && sb.id === sa.id && !ITEMS[sa.id].tool) {
+      const room = stackOf(sa.id) - sb.n;
+      const take = Math.min(room, sa.n);
+      sb.n += take; sa.n -= take;
+      if (sa.n <= 0) G.bag[a] = null;
+    } else {
+      G.bag[a] = sb; G.bag[b] = sa;
+    }
+    blip();
+    updateHotbar();
+  }
+  function killGhost() {
+    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    dragFrom = -1; dragStart = null;
+  }
+  window.addEventListener('mousemove', e => {
+    if (dragFrom < 0) return;
+    if (!didDrag && dragStart && Math.hypot(e.clientX - dragStart[0], e.clientY - dragStart[1]) > 5) {
+      didDrag = true;
+      dragGhost = document.createElement('canvas');
+      dragGhost.width = 16; dragGhost.height = 16;
+      dragGhost.style.cssText = 'position:fixed;width:32px;height:32px;image-rendering:pixelated;pointer-events:none;z-index:99;opacity:0.85;';
+      dragGhost.getContext('2d').drawImage(SPR.item(G.bag[dragFrom].id), 0, 0);
+      document.body.appendChild(dragGhost);
+    }
+    if (dragGhost) {
+      dragGhost.style.left = (e.clientX - 16) + 'px';
+      dragGhost.style.top = (e.clientY - 16) + 'px';
+    }
+  });
+  window.addEventListener('mouseup', e => {
+    if (dragFrom < 0) return;
+    const slot = e.target && e.target.closest ? e.target.closest('.slot') : null;
+    if (didDrag && slot) moveBagSlot(dragFrom, +slot.dataset.slot);
+    killGhost();
+  });
+
   (function buildHotbar() {
     const bar = el('hotbar');
     for (let i = 0; i < 12; i++) {
       const d = document.createElement('div');
       d.className = 'slot';
+      d.dataset.slot = i;
       const key = document.createElement('span');
       key.className = 'keyhint';
       key.textContent = i < 9 ? (i + 1) : (i === 9 ? '0' : '');
@@ -1153,7 +1357,13 @@
       const q = document.createElement('span');
       q.className = 'qty';
       d.appendChild(key); d.appendChild(c); d.appendChild(q);
+      d.addEventListener('mousedown', e => {
+        if (e.button !== 0 || !G.bag[i]) return;
+        dragFrom = i; didDrag = false; dragStart = [e.clientX, e.clientY];
+        e.preventDefault();
+      });
       d.addEventListener('click', () => {
+        if (didDrag) { didDrag = false; return; }    // a drag isn't a click
         if (G.mode !== 'play') return;
         if (G.bagSel === i && G.bag[i]) { useSelected(); }
         else { G.bagSel = i; blip(); updateHotbar(); }
@@ -1163,6 +1373,14 @@
     }
   })();
 
+  // scroll wheel cycles the hotbar selection
+  window.addEventListener('wheel', e => {
+    if (G.mode !== 'play') return;
+    G.bagSel = (G.bagSel + (e.deltaY > 0 ? 1 : 11)) % 12;
+    blip();
+    updateHotbar();
+  }, { passive: true });
+
   function updateHotbar() {
     for (let i = 0; i < 12; i++) {
       const s = G.bag[i], e = slotEls[i];
@@ -1171,6 +1389,417 @@
       if (s) e.ctx.drawImage(SPR.item(s.id), 0, 0);
       e.qty.textContent = s && s.n > 1 ? s.n : '';
     }
+  }
+
+  /* ---------------- M menu (gear / bag / craft) ---------------- */
+  let menuTab = 0, menuSel = 0, menuArm = -1, mTimer = null, mAnim = 0;
+
+  function openMenu() {
+    G.mode = 'menu';
+    menuTab = 0; menuSel = 0; menuArm = -1;
+    el('menu').style.display = 'flex';
+    if (mTimer) clearInterval(mTimer);
+    mTimer = setInterval(() => { mAnim++; drawMenuPreview(); }, 160);
+    refreshMenu();
+    blip();
+  }
+  function closeMenu() {
+    el('menu').style.display = 'none';
+    if (mTimer) { clearInterval(mTimer); mTimer = null; }
+    G.mode = 'play';
+    blip();
+  }
+  function drawMenuPreview() {
+    const dirs = ['down', 'left', 'up', 'right'];
+    const f = player.frames[dirs[Math.floor(mAnim / 8) % 4]][mAnim % 4];
+    const cvs = el('mpreview');
+    if (cvs.width !== f.width || cvs.height !== f.height) {
+      cvs.width = f.width; cvs.height = f.height;
+      const z = Math.floor(128 / f.height);   // integer zoom that fits the 132px wrap
+      cvs.style.width = (f.width * z) + 'px';
+      cvs.style.height = (f.height * z) + 'px';
+    }
+    const c = cvs.getContext('2d');
+    c.clearRect(0, 0, cvs.width, cvs.height);
+    c.drawImage(f, 0, 0);
+  }
+
+  // draw a character frame at 2x in cutscenes; y is the top of a 24-tall
+  // char, taller (generated) frames keep the feet on the same line
+  function drawChar2x(ctx, f, x, y) {
+    ctx.drawImage(f, 0, 0, f.width, f.height, x, y - (f.height - 24) * 2, f.width * 2, f.height * 2);
+  }
+
+  // NPC stand frame, preferring generated sheets (assets.js)
+  const charStand = (pal, dir) => (ASSETS.npc[pal] || SPR.charFrames(pal))[dir][0];
+
+  function refreshMenu() {
+    document.querySelectorAll('.mtab').forEach((t, i) => t.classList.toggle('sel', i === menuTab));
+    el('mgear').classList.toggle('sel', menuTab === 0);
+    el('mbag').classList.toggle('sel', menuTab === 1);
+    el('mcraft').classList.toggle('sel', menuTab === 2);
+    if (menuTab === 0) refreshGear();
+    if (menuTab === 1) refreshBag();
+    if (menuTab === 2) refreshCraft();
+    const hint = el('mhint');
+    hint.classList.remove('warn');
+    if (menuTab === 0) hint.textContent = '←→ TAB    M/ESC CLOSE';
+    else if (menuTab === 1) {
+      if (menuArm >= 0) { hint.textContent = 'PRESS X AGAIN TO TRASH THE WHOLE STACK'; hint.classList.add('warn'); }
+      else hint.textContent = '↑↓ SELECT    X TRASH ITEM    ←→ TAB    M/ESC CLOSE';
+    } else {
+      hint.textContent = '↑↓ SELECT    ENTER CRAFT    ←→ TAB    M/ESC CLOSE';
+    }
+  }
+
+  function refreshGear() {
+    drawMenuPreview();
+    const rows = [
+      ['CALLSIGN', G.callsign],
+      ['CREW', G.cfg.role === 1 ? 'WSO' : 'Pilot'],
+      ['GENDER', SPR.SEXES[G.cfg.sex]],
+      ['HAIR', SPR.HAIRS[G.cfg.hair][0]],
+      ['WEARING', SPR.OUTFITS[G.cfg.outfit].name],
+      ['SHOES', SPR.SHOES[G.cfg.shoes][0]],
+      ['HAT', SPR.HATS[G.cfg.hat]],
+      ['DAY', G.day + ' / ' + G.deployEnd],
+      ['SORTIES', G.sorties + (medals() ? '  (AM x' + medals() + ')' : '')],
+      ['SQDN MORALE', Math.round(G.morale) + ' / 100']
+    ];
+    const list = el('mgearlist');
+    list.innerHTML = '';
+    rows.forEach(r => {
+      const d = document.createElement('div');
+      d.className = 'grow';
+      const l = document.createElement('span'); l.className = 'gl'; l.textContent = r[0];
+      const v = document.createElement('span'); v.className = 'gv'; v.textContent = r[1];
+      d.appendChild(l); d.appendChild(v);
+      list.appendChild(d);
+    });
+  }
+
+  function refreshBag() {
+    const list = el('mbaglist');
+    list.innerHTML = '';
+    G.bag.forEach((s, i) => {
+      const d = document.createElement('div');
+      d.className = 'mrow' + (i === menuSel ? ' sel' : '') + (s ? '' : ' dim');
+      const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+      if (s) c.getContext('2d').drawImage(SPR.item(s.id), 0, 0);
+      d.appendChild(c);
+      const nm = document.createElement('span'); nm.className = 'mname';
+      nm.textContent = s ? ITEMS[s.id].name : '— empty —';
+      d.appendChild(nm);
+      if (s) {
+        const q = document.createElement('span'); q.className = 'mqty'; q.textContent = 'x' + s.n;
+        d.appendChild(q);
+        const x = document.createElement('span'); x.className = 'mdel';
+        x.textContent = (menuArm === i) ? 'SURE?' : 'X';
+        x.addEventListener('click', ev => { ev.stopPropagation(); bagDelete(i); });
+        d.appendChild(x);
+      }
+      d.addEventListener('click', () => { menuSel = i; menuArm = -1; refreshMenu(); });
+      list.appendChild(d);
+    });
+  }
+
+  function bagDelete(i) {
+    if (!G.bag[i]) { noBeep(); return; }
+    if (ITEMS[G.bag[i].id].tool) { noBeep(); toast('You\'re not trashing your tools.'); return; }
+    if (menuArm === i) {
+      toast('Trashed: ' + ITEMS[G.bag[i].id].name + ' x' + G.bag[i].n);
+      G.bag[i] = null;
+      menuArm = -1;
+      updateHotbar();
+      okBeep();
+    } else {
+      menuArm = i; menuSel = i;
+      noBeep();
+    }
+    refreshMenu();
+  }
+
+  function refreshCraft() {
+    const list = el('mcraftlist');
+    list.innerHTML = '';
+    craftList().forEach((r, i) => {
+      const ok = canAfford(r.cost);
+      const d = document.createElement('div');
+      d.className = 'mrow' + (i === menuSel ? ' sel' : '') + (ok ? '' : ' dim');
+      const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+      c.getContext('2d').drawImage(SPR.item(r.id), 0, 0);
+      d.appendChild(c);
+      const nm = document.createElement('span'); nm.className = 'mname';
+      const t1 = document.createElement('div'); t1.textContent = ITEMS[r.id].name;
+      const t2 = document.createElement('div'); t2.className = 'mdesc'; t2.textContent = r.desc;
+      nm.appendChild(t1); nm.appendChild(t2);
+      d.appendChild(nm);
+      const cost = document.createElement('span'); cost.className = 'mcost';
+      cost.textContent = costText(r.cost);
+      d.appendChild(cost);
+      d.addEventListener('click', () => {
+        if (menuSel === i) craftSel();
+        else { menuSel = i; refreshMenu(); }
+      });
+      list.appendChild(d);
+    });
+  }
+
+  function craftSel() {
+    const r = craftList()[menuSel];
+    if (!r) return;
+    if (r.unique && (G.bag.some(s => s && s.id === r.id) ||
+                     (G.carrying && G.carrying.id === r.id) ||
+                     G.placed.some(p => p.id === r.id))) {
+      noBeep();
+      toast('You\'ve already got one. CROC agrees: one stand is plenty.');
+      return;
+    }
+    if (!canAfford(r.cost)) { noBeep(); toast('Not enough materials — need ' + costText(r.cost)); return; }
+    spendCost(r.cost);
+    if (addItem(r.id, 1) < 1) {
+      Object.keys(r.cost).forEach(id => addItem(id, r.cost[id]));   // refund
+      noBeep();
+      toast('Your pockets are full!');
+      return;
+    }
+    okBeep();
+    toast('Crafted: ' + ITEMS[r.id].name + ' — select it in the hotbar, press F to place.');
+    refreshMenu();
+  }
+
+  function moveMenuSel(d) {
+    const n = menuTab === 1 ? G.bag.length : menuTab === 2 ? craftList().length : 0;
+    if (!n) return;
+    menuSel = (menuSel + d + n) % n;
+    menuArm = -1;
+    blip();
+    refreshMenu();
+  }
+
+  function menuKey(k) {
+    if (k === 'm' || k === 'M' || k === 'Escape') { closeMenu(); return; }
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') { menuTab = (menuTab + 2) % 3; menuSel = 0; menuArm = -1; blip(); refreshMenu(); }
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') { menuTab = (menuTab + 1) % 3; menuSel = 0; menuArm = -1; blip(); refreshMenu(); }
+    else if (k === 'ArrowUp' || k === 'w' || k === 'W') moveMenuSel(-1);
+    else if (k === 'ArrowDown' || k === 's' || k === 'S') moveMenuSel(1);
+    else if ((k === 'x' || k === 'X' || k === 'Delete') && menuTab === 1) bagDelete(menuSel);
+    else if ((k === 'Enter' || k === 'e' || k === 'E' || k === ' ') && menuTab === 2) craftSel();
+  }
+
+  document.querySelectorAll('.mtab').forEach((t, i) => {
+    t.addEventListener('click', () => {
+      if (G.mode !== 'menu') return;
+      menuTab = i; menuSel = 0; menuArm = -1;
+      refreshMenu();
+    });
+  });
+
+  /* ---------------- chest / storage UI ---------------- */
+  let chestObj = null, chestFocus = 0, chestSel = 0;
+  const chestSlotEls = [], bagSlotEls2 = [];
+
+  (function buildChestUI() {
+    const mk = (parent, arr, count, row) => {
+      for (let i = 0; i < count; i++) {
+        const d = document.createElement('div');
+        d.className = 'slot';
+        const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+        const q = document.createElement('span'); q.className = 'qty';
+        d.appendChild(c); d.appendChild(q);
+        const idx = i;
+        d.addEventListener('click', () => {
+          if (G.mode !== 'chest') return;
+          if (chestFocus === row && chestSel === idx) chestTransfer();
+          else { chestFocus = row; chestSel = idx; blip(); refreshChestUI(); }
+        });
+        parent.appendChild(d);
+        arr.push({ div: d, ctx: c.getContext('2d'), qty: q });
+      }
+    };
+    mk(el('chestslots'), chestSlotEls, 10, 0);
+    mk(el('bagslots'), bagSlotEls2, 12, 1);
+  })();
+
+  function openChest(po) {
+    chestObj = po; chestFocus = 0; chestSel = 0;
+    G.mode = 'chest';
+    el('chestname').textContent = ITEMS[po.id].name.toUpperCase();
+    el('chestui').style.display = 'flex';
+    refreshChestUI();
+    blip();
+  }
+  function closeChest() {
+    el('chestui').style.display = 'none';
+    chestObj = null;
+    G.mode = 'play';
+    save();
+    blip();
+  }
+  function refreshChestUI() {
+    el('chestslots').classList.toggle('focus', chestFocus === 0);
+    el('bagslots').classList.toggle('focus', chestFocus === 1);
+    const paint = (els, arr, row) => {
+      els.forEach((e, i) => {
+        const s = arr[i];
+        e.div.classList.toggle('sel', chestFocus === row && chestSel === i);
+        e.ctx.clearRect(0, 0, 16, 16);
+        if (s) e.ctx.drawImage(SPR.item(s.id), 0, 0);
+        e.qty.textContent = s && s.n > 1 ? s.n : '';
+      });
+    };
+    paint(chestSlotEls, chestObj.inv, 0);
+    paint(bagSlotEls2, G.bag, 1);
+  }
+  function chestTransfer() {
+    const fromArr = chestFocus === 0 ? chestObj.inv : G.bag;
+    const toArr = chestFocus === 0 ? G.bag : chestObj.inv;
+    const s = fromArr[chestSel];
+    if (!s) { noBeep(); return; }
+    const moved = addToContainer(toArr, s.id, s.n);
+    if (moved <= 0) { noBeep(); toast('No room on the other side.'); return; }
+    s.n -= moved;
+    if (s.n <= 0) fromArr[chestSel] = null;
+    blip();
+    updateHotbar();
+    refreshChestUI();
+  }
+  function chestKey(k) {
+    if (k === 'Escape' || k === 'm' || k === 'M') { closeChest(); return; }
+    const rowLen = chestFocus === 0 ? chestSlotEls.length : bagSlotEls2.length;
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') { chestSel = (chestSel - 1 + rowLen) % rowLen; blip(); refreshChestUI(); }
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') { chestSel = (chestSel + 1) % rowLen; blip(); refreshChestUI(); }
+    else if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'w' || k === 'W' || k === 's' || k === 'S') {
+      chestFocus = 1 - chestFocus;
+      chestSel = Math.min(chestSel, (chestFocus === 0 ? chestSlotEls.length : bagSlotEls2.length) - 1);
+      blip(); refreshChestUI();
+    }
+    else if (k === 'Enter' || k === 'e' || k === 'E' || k === ' ' || k === 'f' || k === 'F') chestTransfer();
+  }
+
+  /* ---------------- crafting & placeable objects ---------------- */
+  const PLACEABLES = {
+    chest:      { furn: 'chest',      storage: 10, breakYield: { wood: 2, scrap: 1 } },
+    footlocker: { furn: 'footlocker', storage: 10, breakYield: { wood: 3, scrap: 2 } },
+    sign:       { furn: 'sign',       breakYield: { wood: 1 } },
+    chair:      { furn: 'chair',      breakYield: { wood: 1 } },
+    coffeestand: { furn: 'coffeestand', breakYield: { wood: 4, scrap: 2 } }
+  };
+  const RECIPES = [
+    { id: 'chest',      cost: { wood: 4, scrap: 2 }, desc: '10-slot storage. Place anywhere, move anytime.' },
+    { id: 'footlocker', cost: { wood: 6, scrap: 4 }, desc: 'Another 10-slot box. Olive drab. Sturdy.' },
+    { id: 'sign',       cost: { wood: 2 },           desc: 'Hand-painted morale. Read it daily. (+Spirit)' },
+    { id: 'chair',      cost: { wood: 3, scrap: 1 }, desc: 'A seat that isn\'t a hesco. (+Spirit +Energy)' },
+    { id: 'coffeestand', cost: { wood: 8, scrap: 4 }, desc: 'CROC\'s coffee stand. Place it outside, stock it, and customers will come.',
+      when: () => G.croc.intro, unique: true }
+  ];
+  // recipes currently visible in the craft tab (some unlock via quests)
+  const craftList = () => RECIPES.filter(r => !r.when || r.when());
+  const SLOGANS = [
+    'HOME IS THAT WAY ->',
+    'MANDATORY FUN AREA',
+    'THE FUN POLICE CAN\'T CATCH US ALL',
+    'DAYS OF SUNSHINE LEFT: ALL OF THEM',
+    'IT\'S NOT A PHASE, IT\'S A DEPLOYMENT'
+  ];
+
+  function placedAt(mapKey, x, y) {
+    return G.placed.find(p => p.map === mapKey && p.x === x && p.y === y) || null;
+  }
+
+  function canPlaceAt(m, x, y) {
+    if (x < 0 || y < 0 || x >= m.w || y >= m.h) return false;
+    if (m.solid[y][x]) return false;
+    if (m.hot[x + ',' + y]) return false;                      // never block doors/exits/hotspots
+    if (m.npcs.some(n => n.x === x && n.y === y)) return false;
+    if (placedAt(m.key, x, y)) return false;
+    if (m.key === 'exterior' && G.groundItems.some(g => g.x === x && g.y === y)) return false;
+    if (player.tx === x && player.ty === y) return false;
+    return true;
+  }
+
+  function makePlacedObj(id, mapKey, x, y) {
+    const obj = { id, map: mapKey, x, y };
+    if (PLACEABLES[id].storage) obj.inv = new Array(PLACEABLES[id].storage).fill(null);
+    if (id === 'sign') { obj.slogan = SLOGANS[Math.floor(Math.random() * SLOGANS.length)]; obj.day = 0; }
+    if (id === 'coffeestand') obj.stock = 0;
+    return obj;
+  }
+
+  function placeFromBag(id) {
+    const [fx, fy] = facingTile();
+    if (id === 'coffeestand' && G.map.key !== 'exterior') {
+      noBeep();
+      toast('The stand needs foot traffic — set it up outside.');
+      return;
+    }
+    if (!canPlaceAt(G.map, fx, fy)) { noBeep(); toast('Can\'t place it there.'); return; }
+    removeItem(id, 1);
+    G.placed.push(makePlacedObj(id, G.map.key, fx, fy));
+    okBeep();
+    if (id === 'coffeestand') {
+      say(['The coffee stand is OPEN FOR BUSINESS.',
+           'Stock it with CROC\'s coffee (face it, press F) and the base will do the rest.',
+           'Word travels fast out here. Especially about caffeine.']);
+    } else {
+      toast(ITEMS[id].name + ' placed.');
+    }
+    save();
+  }
+
+  function placedMenu(po) {
+    const name = ITEMS[po.id].name;
+    const def = PLACEABLES[po.id];
+    const opts = [], acts = [];
+    if (def.storage) { opts.push('Open'); acts.push('open'); }
+    if (po.id === 'sign') { opts.push('Read'); acts.push('read'); }
+    if (po.id === 'chair') { opts.push('Sit a while (15 min)'); acts.push('sit'); }
+    if (po.id === 'coffeestand') {
+      opts.push('Stock coffee (' + (po.stock || 0) + ' in stand, ' + countItem('coffee') + ' on you)');
+      acts.push('stock');
+    }
+    opts.push('Pick up / move', 'Break it down', 'Leave it');
+    acts.push('move', 'break', 'cancel');
+    ask(name, opts, i => {
+      const a = acts[i < 0 ? acts.length - 1 : i];
+      if (a === 'open') { openChest(po); }
+      else if (a === 'stock') { stockStand(po, countItem('coffee')); }
+      else if (a === 'read') {
+        if (po.day === G.day) { say(['"' + po.slogan + '"', 'Still true. You already got your morale from it today.']); return; }
+        po.day = G.day;
+        addStats({ sp: 3 });
+        say(['"' + po.slogan + '"', 'You know what? Yeah. (+Spirit)']);
+      }
+      else if (a === 'sit') {
+        addStats({ sp: 5, en: 4 });
+        passTime(15);
+        say(['You sit in your own chair, in your own spot, on purpose.',
+             'Fifteen minutes of absolutely nothing. Perfect. (+Spirit, +Energy)']);
+      }
+      else if (a === 'move') {
+        G.placed = G.placed.filter(p => p !== po);
+        G.carrying = po;
+        blip();
+        toast('Carrying ' + name + ' — face a clear tile, press E.');
+      }
+      else if (a === 'break') {
+        if (po.inv && po.inv.some(Boolean)) { noBeep(); say(['It\'s still got stuff in it. Empty it out first.']); return; }
+        if (po.id === 'coffeestand' && po.stock > 0) {
+          noBeep();
+          say(['There\'s still coffee in it. Sell out before you tear it down — CROC would cry.']);
+          return;
+        }
+        G.placed = G.placed.filter(p => p !== po);
+        const got = [];
+        Object.keys(def.breakYield).forEach(id => {
+          addItem(id, def.breakYield[id]);
+          got.push(ITEMS[id].name + ' x' + def.breakYield[id]);
+        });
+        okBeep();
+        toast('Broke down the ' + name.toLowerCase() + ' — recovered ' + got.join(', '));
+        save();
+      }
+    });
   }
 
   /* ---------------- MWR build projects ---------------- */
@@ -1270,6 +1899,194 @@
     okBeep();
   }
 
+  /* ---------------- CROC's coffee stand: stock + walk-up customers ---------------- */
+  const theStand = () => G.placed.find(p => p.id === 'coffeestand' && p.map === 'exterior') || null;
+
+  function stockStand(po, n) {
+    if (n <= 0) {
+      noBeep();
+      say(['No bags on you. CROC restocks every couple of days — go see him at OPS.']);
+      return;
+    }
+    removeItem('coffee', n);
+    po.stock = (po.stock || 0) + n;
+    custT = Math.min(custT, 6);          // word gets around fast
+    okBeep();
+    toast('Stocked ' + n + ' bag' + (n > 1 ? 's' : '') + ' — stand holds ' + po.stock + '. Customers will come.');
+    updateHotbar();
+    save();
+  }
+
+  // wandering buyers (transient — not saved)
+  const CUSTOMER_TYPES = [
+    { pal: 'crew',       line: 'A crew dog slaps down cash. "Real coffee. REAL coffee."' },
+    { pal: 'crew',       line: 'Two crew dogs split a bag. Cash, no questions.' },
+    { pal: 'guard',      line: 'A gate guard buys a bag two hours into a twelve-hour shift.' },
+    { pal: 'guard',      line: 'A gate guard mutters "finally" and takes a bag.' },
+    { pal: 'contractor', line: 'A contractor pays double "for the good stuff."' },
+    { pal: 'maint',      line: 'A maintainer pays exact change with a tired nod.' }
+  ];
+  const customers = [];
+  let custT = 6;
+
+  // BFS shortest path on the walkable grid; goals = list of [x,y] targets
+  function custPath(m, sx, sy, goals) {
+    const key = (x, y) => x + ',' + y;
+    const goal = {};
+    let any = false;
+    goals.forEach(([x, y]) => { if (walkable(m, x, y)) { goal[key(x, y)] = true; any = true; } });
+    if (!any) return null;
+    const prev = {};
+    prev[key(sx, sy)] = null;
+    const q = [[sx, sy]];
+    while (q.length) {
+      const [x, y] = q.shift();
+      if (goal[key(x, y)]) {
+        const path = [];
+        let k = [x, y];
+        while (k) { path.unshift(k); k = prev[key(k[0], k[1])]; }
+        return path;
+      }
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (prev[key(nx, ny)] !== undefined || !walkable(m, nx, ny)) continue;
+        prev[key(nx, ny)] = [x, y];
+        q.push([nx, ny]);
+      }
+    }
+    return null;
+  }
+
+  // customers appear at a building door and walk to the stand's counter
+  function spawnCustomer(m, stand) {
+    const doors = WORLD.BUILDINGS.map(b => WORLD.doorOf(b)).map(d => [d.x, d.y + 1])
+      .filter(([x, y]) => walkable(m, x, y));
+    if (!doors.length) return;
+    const [sx, sy] = doors[(Math.random() * doors.length) | 0];
+    const front = [[stand.x, stand.y + 1], [stand.x - 1, stand.y], [stand.x + 1, stand.y], [stand.x, stand.y - 1]];
+    const path = custPath(m, sx, sy, front);
+    if (!path || path.length < 2) return;
+    const t = CUSTOMER_TYPES[(Math.random() * CUSTOMER_TYPES.length) | 0];
+    customers.push({ pal: t.pal, line: t.line, path, i: 0, x: sx, y: sy,
+                     px: sx * T, py: sy * T, dir: 'down', state: 'walk', t: 0, animT: 0 });
+  }
+
+  function faceStand(c) {
+    const s = theStand();
+    if (!s) return;
+    const dx = s.x - c.x, dy = s.y - c.y;
+    c.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+  }
+
+  function updateCustomers(dt) {
+    const m = G.map;
+    if (m.key !== 'exterior') return;
+    const stand = theStand();
+    const hour = G.timeMin / 60;
+    if (stand && stand.stock > 0 && !G.alarm && hour >= 7 && hour < 20 && customers.length < 3) {
+      custT -= dt;
+      if (custT <= 0) {
+        custT = 40 + Math.random() * 50;
+        spawnCustomer(m, stand);
+      }
+    }
+    const SPEED = 55;
+    for (let i = customers.length - 1; i >= 0; i--) {
+      const c = customers[i];
+      if (c.state === 'buy') {
+        c.t += dt;
+        if (c.t < 1.5) continue;
+        const s = theStand();
+        if (s && s.stock > 0) {          // could've been picked up / sold out mid-visit
+          s.stock--;
+          G.croc.fund = Math.min(100, G.croc.fund + 10);
+          addMorale(1);
+          okBeep();
+          toast(c.line + ' Vacation fund: ' + G.croc.fund + '%');
+          save();
+        }
+        c.state = 'leave';
+        c.path = c.path.slice(0, c.i + 1).reverse();
+        c.i = 0;
+        continue;
+      }
+      c.animT += dt;
+      const [tx, ty] = c.path[c.i];
+      const gx = tx * T, gy = ty * T;
+      const step = SPEED * dt;
+      const dx = gx - c.px, dy = gy - c.py;
+      if (dx || dy) c.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+      c.px += clamp(dx, -step, step);
+      c.py += clamp(dy, -step, step);
+      if (c.px === gx && c.py === gy) {
+        c.x = tx; c.y = ty;
+        if (c.i < c.path.length - 1) c.i++;
+        else if (c.state === 'walk') { c.state = 'buy'; c.t = 0; c.animT = 0; faceStand(c); }
+        else customers.splice(i, 1);     // walked off — despawn
+      }
+    }
+  }
+
+  /* ---------------- junkyard salvage (Stardew-style: hammer swings) ---------------- */
+  const SALVAGE_HITS = 3, SALVAGE_EN = 4, SALVAGE_MIN = 8;
+  let swingFx = [];                      // impact particles (transient)
+  const FX_COLORS = {
+    pallet:  ['#c9a26a', '#8a6b40', '#e2c088'],
+    junk:    ['#9a9aa0', '#6f6f76', '#c9c9c9'],
+    machine: ['#c9c9c9', '#e8a23c', '#8f8f96']
+  };
+  function salvageLoot(spot) {
+    const r = Math.random();
+    if (spot === 'pallet') return { wood: r > 0.5 ? 2 : 1 };
+    if (spot === 'junk')   return r > 0.85 ? { scrap: 1, wood: 1 } : { scrap: r > 0.45 ? 2 : 1 };
+    // old machine: the good stuff
+    return r < 0.45 ? { scrap: 2 } : (r < 0.75 ? { cable: 1 } : { elec: 1 });
+  }
+  function startSwing(h, fx, fy) {
+    if (G.swing) return;
+    if (G.junk.day !== G.day) G.junk = { day: G.day, nodes: {} };   // fresh yard each day
+    if ((G.junk.nodes[fx + ',' + fy] || 0) >= SALVAGE_HITS) {
+      blip();
+      say([h.label + ' — picked clean. The yard restocks overnight.']);
+      return;
+    }
+    if (G.stats.en < SALVAGE_EN + 2) {
+      noBeep();
+      say(['You\'re too smoked to swing the hammer. Eat or rest first.']);
+      return;
+    }
+    G.swing = { fx, fy, h, t: 0, hit: false };
+    blip();
+  }
+  function swingImpact() {
+    const s = G.swing;
+    const key = s.fx + ',' + s.fy;
+    G.junk.nodes[key] = (G.junk.nodes[key] || 0) + 1;
+    addStats({ en: -SALVAGE_EN });
+    passTime(SALVAGE_MIN);
+    const gains = salvageLoot(s.h.spot);
+    const parts = [];
+    Object.keys(gains).forEach(id => { addItem(id, gains[id]); parts.push(ITEMS[id].name + ' x' + gains[id]); });
+    okBeep();
+    G.shake = 0.14;
+    const cols = FX_COLORS[s.h.spot] || FX_COLORS.junk;
+    for (let i = 0; i < 8; i++) {
+      swingFx.push({
+        x: s.fx * T + 8, y: s.fy * T + 8,
+        vx: (Math.random() - 0.5) * 90, vy: -40 - Math.random() * 70,
+        life: 0.35 + Math.random() * 0.2,
+        c: cols[(Math.random() * cols.length) | 0]
+      });
+    }
+    const left = SALVAGE_HITS - G.junk.nodes[key];
+    toast('+' + parts.join(', +') + ' (-EN)' + (left ? '' : ' — picked clean'));
+    updateHotbar();
+  }
+  function doSalvage(h) {
+    const [fx, fy] = facingTile();
+    startSwing(h, fx, fy);
+  }
+
   /* ---------------- gathering & theft ---------------- */
   function spotUsed(spot) { return G.gather[spot] === G.day; }
 
@@ -1343,6 +2160,7 @@
   function walkable(m, x, y) {
     if (x < 0 || y < 0 || x >= m.w || y >= m.h) return false;
     if (m.solid[y][x]) return false;
+    if (placedAt(m.key, x, y)) return false;
     for (const n of m.npcs) if (n.x === x && n.y === y) return false;
     return true;
   }
@@ -1385,6 +2203,23 @@
 
   function interact() {
     const [fx, fy] = facingTile();
+    if (G.carrying) {          // set the carried object down
+      if (canPlaceAt(G.map, fx, fy)) {
+        G.carrying.map = G.map.key;
+        G.carrying.x = fx; G.carrying.y = fy;
+        G.placed.push(G.carrying);
+        G.carrying = null;
+        okBeep();
+        toast('Placed.');
+        save();
+      } else {
+        noBeep();
+        toast('Can\'t place it there.');
+      }
+      return;
+    }
+    const po = placedAt(G.map.key, fx, fy);
+    if (po) { placedMenu(po); return; }
     const npc = G.map.npcs.find(n => n.x === fx && n.y === fy);
     if (npc) { ACTIONS[npc.action](npc); return; }
     const h = G.map.hot[fx + ',' + fy];
@@ -1399,6 +2234,18 @@
     tickStats(dtMin);
     if (G.mode !== 'play') return;
     if (G.timeMin >= 24 * 60) { doSleep(true); return; }
+
+    // hammer swing + impact juice
+    if (G.shake > 0) G.shake = Math.max(0, G.shake - dt);
+    if (G.swing) {
+      G.swing.t += dt;
+      if (!G.swing.hit && G.swing.t >= 0.16) { G.swing.hit = true; swingImpact(); }
+      if (G.swing.t >= 0.34) G.swing = null;
+    }
+    if (swingFx.length) {
+      swingFx = swingFx.filter(p => (p.life -= dt) > 0);
+      swingFx.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; });
+    }
 
     // squadron morale hit 100 — the fun police take notice
     if (G.moralePop) {
@@ -1480,6 +2327,9 @@
     } else {
       player.animT = 0;
     }
+
+    // coffee stand walk-up customers
+    updateCustomers(dt);
   }
 
   /* ---------------- flight minigame ---------------- */
@@ -1900,7 +2750,7 @@
     ctx.fillRect(208, 132, 3, 4);
     // gate guard walking a slow circuit by the truck
     const gx = 178 + Math.sin(t * 0.8) * 6;
-    ctx.drawImage(SPR.charFrames('officer').right[0], 0, 0, 16, 16, gx, 122, 32, 32);
+    drawChar2x(ctx, charStand('officer', 'right'), gx, 106);
     // caption
     ctx.fillStyle = 'rgba(20,16,10,0.7)';
     ctx.fillRect(FW / 2 - 55, 4, 110, 14);
@@ -1980,9 +2830,9 @@
       ctx.fillRect(262 + Math.sin((p + i * 9) / 7) * 5, 140 - p, 4, 4);
     }
     // the contact behind the table, you and HARD in front
-    ctx.drawImage(SPR.charFrames('chief').down[0], 0, 0, 16, 16, 196, 118, 32, 32);
-    ctx.drawImage(player.frames.right[0], 0, 0, 16, 16, 98, 142, 32, 32);
-    ctx.drawImage(SPR.charFrames('hard').right[0], 0, 0, 16, 16, 126, 140, 32, 32);
+    drawChar2x(ctx, charStand('chief', 'down'), 196, 102);
+    drawChar2x(ctx, player.frames.right[0], 98, 126);
+    drawChar2x(ctx, charStand('hard', 'right'), 126, 124);
     // a goat, supervising
     const gx = 40 + ((t * 9) % 190);
     SPR.drawGoat(ctx, gx, 126);
@@ -2121,6 +2971,93 @@
       () => { G.scene = null; });
   }
 
+  /* ---------------- ambient life & light ---------------- */
+  function drawAmbient(m, camX, camY, offX, offY) {
+    if (m.key !== 'exterior') return;
+    const t = performance.now() / 1000;
+    // palm fronds swaying
+    WORLD.TREES.forEach(([tx, ty], i) => {
+      const bx = tx * T - camX + offX, by = ty * T - camY + offY;
+      if (bx < -T || bx > FW || by < -T || by > FH) return;
+      const s = Math.round(Math.sin(t * 1.4 + i * 1.7));
+      ctx.fillStyle = '#659448';
+      ctx.fillRect(bx + 2 + s, by + 4, 3, 1);
+      ctx.fillRect(bx + 11 + s, by + 4, 3, 1);
+      ctx.fillStyle = '#7fae5a';
+      ctx.fillRect(bx + 6 + s, by + 2, 4, 1);
+    });
+    // midday heat shimmer over the flight line
+    const hr = G.timeMin / 60;
+    if (hr >= 9 && hr <= 17) {
+      for (let i = 0; i < 7; i++) {
+        const wx = 60 + i * 115, wy = 30 + (i * 37) % 110;
+        const sx = wx - camX + offX, sy = wy - camY + offY;
+        if (sx < 0 || sx > FW - 2 || sy < 0 || sy > FH - 8) continue;
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.05 + 0.04 * Math.sin(t * 6 + i * 2.1)) + ')';
+        ctx.fillRect(sx + Math.sin(t * 3 + i) * 2, sy + Math.sin(t * 4 + i) * 2, 2, 7);
+      }
+    }
+    // drifting dust
+    for (let i = 0; i < 3; i++) {
+      const wx = (t * 9 + i * 331) % (m.w * T);
+      const wy = 170 + 60 * Math.sin(t * 0.25 + i * 2.1);
+      const sx = wx - camX + offX, sy = wy - camY + offY;
+      if (sx < 0 || sx > FW - 8 || sy < 0 || sy > FH - 4) continue;
+      ctx.fillStyle = 'rgba(235,215,165,0.3)';
+      ctx.fillRect(sx, sy, 3, 1);
+      ctx.fillRect(sx + 4, sy + 1, 2, 1);
+    }
+  }
+
+  function drawGlows(m, camX, camY, offX, offY) {
+    if (m.key !== 'exterior') return;
+    const t = performance.now() / 1000;
+    const na = nightAlpha();
+    // blinking jet beacons
+    WORLD.JETS.forEach((j, i) => {
+      if (Math.floor(t * 1.3 + i * 0.6) % 2 !== 0) return;
+      const bx = j.x * T + 30 - camX + offX, by = j.y * T + 1 - camY + offY;
+      if (bx < 0 || bx > FW || by < 0 || by > FH) return;
+      ctx.fillStyle = '#ff4a3a';
+      ctx.fillRect(bx, by, 2, 2);
+      if (na > 0.2) {
+        ctx.fillStyle = 'rgba(255,80,60,0.22)';
+        ctx.fillRect(bx - 2, by - 2, 6, 6);
+      }
+    });
+    // fire pit crackle (flame flicker always, glow at night)
+    if (G.built.firepit) {
+      const fx = 37 * T - camX + offX, fy = 27 * T - camY + offY;
+      if (fx > -32 && fx < FW + 16 && fy > -32 && fy < FH + 16) {
+        const f = 0.5 + 0.5 * Math.sin(t * 9);
+        ctx.fillStyle = f > 0.5 ? '#ffd75e' : '#ff9a3a';
+        ctx.fillRect(fx + 6 + (f > 0.5 ? 1 : 0), fy + 3, 3, 4);
+        if (na > 0.2) {
+          ctx.fillStyle = 'rgba(255,150,50,' + (0.18 + 0.12 * f) + ')';
+          ctx.fillRect(fx - 8, fy - 8, 32, 32);
+        }
+      }
+    }
+    // warm window light after dark — lit glass + additive halo
+    if (na > 0.25) {
+      WORLD.BUILDINGS.forEach(b => {
+        const door = WORLD.doorOf(b);
+        const wy = (b.y + b.h - 1) * T - camY + offY;
+        if (wy < -T || wy > FH) return;
+        [door.x - 2, door.x + 2].forEach(wx => {
+          const sx = wx * T - camX + offX;
+          if (sx < -T || sx > FW) return;
+          ctx.fillStyle = 'rgba(255,214,120,' + (0.8 * na) + ')';
+          ctx.fillRect(sx + 3, wy + 4, 10, 7);
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.fillStyle = 'rgba(255,170,70,0.12)';
+          ctx.fillRect(sx - 2, wy + 1, 20, 14);
+          ctx.globalCompositeOperation = 'source-over';
+        });
+      });
+    }
+  }
+
   /* ---------------- rendering ---------------- */
   function nightAlpha() {
     const h = G.timeMin / 60;
@@ -2137,8 +3074,13 @@
     const mw = m.w * T, mh = m.h * T;
     const offX = Math.max(0, (FW - mw) >> 1);
     const offY = Math.max(0, (FH - mh) >> 1);
-    const camX = clamp(player.px - FW / 2 + T / 2, 0, Math.max(0, mw - FW));
-    const camY = clamp(player.py - FH / 2 + T / 2, 0, Math.max(0, mh - FH));
+    let camX = clamp(player.px - FW / 2 + T / 2, 0, Math.max(0, mw - FW));
+    let camY = clamp(player.py - FH / 2 + T / 2, 0, Math.max(0, mh - FH));
+    lastCam = { camX, camY, offX, offY };            // for click-to-tile mapping
+    if (G.shake > 0) {                               // impact shake
+      camX += (Math.random() * 4 - 2) | 0;
+      camY += (Math.random() * 3 - 1.5) | 0;
+    }
 
     ctx.drawImage(m.canvas, camX, camY, Math.min(FW, mw), Math.min(FH, mh),
                   offX, offY, Math.min(FW, mw), Math.min(FH, mh));
@@ -2150,17 +3092,79 @@
       });
     }
 
-    // entities sorted by y
+    // crafted objects placed on this map
+    G.placed.forEach(p => {
+      if (p.map === m.key) {
+        ctx.drawImage(SPR.furn(PLACEABLES[p.id].furn), p.x * T - camX + offX, p.y * T - camY + offY);
+      }
+    });
+
+    // ambient life (palm sway, heat shimmer, dust)
+    drawAmbient(m, camX, camY, offX, offY);
+
+    // entities sorted by y — 16x24 sprites, feet on the tile, soft drop shadow
+    const shadow = (sx, sy) => {
+      ctx.fillStyle = 'rgba(20,14,8,0.28)';
+      ctx.fillRect(sx + 3, sy + 13, 10, 3);
+      ctx.fillRect(sx + 4, sy + 12, 8, 5);
+    };
     const ents = m.npcs.map(n => ({
       py: n.y * T,
-      draw: () => ctx.drawImage(SPR.charFrames(n.pal)[n.dir][0], n.x * T - camX + offX, n.y * T - 3 - camY + offY)
+      draw: () => {
+        const sx = n.x * T - camX + offX, sy = n.y * T - camY + offY;
+        shadow(sx, sy);
+        const nf = charStand(n.pal, n.dir);
+        ctx.drawImage(nf, sx - ((nf.width - 16) >> 1), sy - (nf.height - 16));
+      }
+    }));
+    // coffee stand customers (exterior only)
+    if (m.key === 'exterior') customers.forEach(c => ents.push({
+      py: c.py,
+      draw: () => {
+        const sx = Math.round(c.px) - camX + offX, sy = Math.round(c.py) - camY + offY;
+        shadow(sx, sy);
+        const fr = SPR.charFrames(c.pal);
+        const f = fr[c.dir][c.state === 'buy' ? 0 : (Math.floor(c.animT / 0.15) % 4)];
+        ctx.drawImage(f, sx, sy - (f.height - 16));
+        if (c.state === 'buy' && c.t > 0.25) {       // little "coffee, please" bubble
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillRect(sx + 2, sy - 21, 12, 11);
+          ctx.fillRect(sx + 6, sy - 10, 2, 2);
+          ctx.drawImage(SPR.item('coffee'), sx + 4, sy - 20, 9, 9);
+        }
+      }
     }));
     const pframe = player.frames[player.dir][player.moving ? (Math.floor(player.animT / 0.13) % 4) : 0];
     ents.push({
       py: player.py,
-      draw: () => ctx.drawImage(pframe, Math.round(player.px) - camX + offX, Math.round(player.py) - 3 - camY + offY)
+      draw: () => {
+        const sx = Math.round(player.px) - camX + offX, sy = Math.round(player.py) - camY + offY;
+        shadow(sx, sy);
+        ctx.drawImage(pframe, sx, sy - (pframe.height - 16));
+      }
     });
     ents.sort((a, b) => a.py - b.py).forEach(e => e.draw());
+
+    // hammer swing (drawn over the player, toward the node)
+    if (G.swing && ASSETS.hammer) {
+      const f = ASSETS.hammer[G.swing.t < 0.16 ? 0 : 1];
+      const psx = Math.round(player.px) - camX + offX, psy = Math.round(player.py) - camY + offY;
+      const off = { up: [1, -16], down: [1, 2], left: [-11, -8], right: [11, -8] }[player.dir];
+      if (player.dir === 'left') {
+        ctx.save();
+        ctx.translate(psx + off[0] + 16, psy + off[1]);
+        ctx.scale(-1, 1);
+        ctx.drawImage(f, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.drawImage(f, psx + off[0], psy + off[1]);
+      }
+    }
+    // impact particles (wood chips / sparks)
+    swingFx.forEach(p => {
+      ctx.fillStyle = p.c;
+      ctx.fillRect(((p.x - camX + offX) | 0), ((p.y - camY + offY) | 0), 2, 2);
+    });
 
     // night tint (exterior only)
     if (!m.isInterior) {
@@ -2170,6 +3174,9 @@
         ctx.fillRect(0, 0, FW, FH);
       }
     }
+
+    // lights that punch through the dark (windows, beacons, fire)
+    drawGlows(m, camX, camY, offX, offY);
 
     // Alarm Red — pulsing warning
     if (G.alarm) {
@@ -2314,7 +3321,7 @@
 
   /* ---------------- HUD ---------------- */
   function updateHUD() {
-    const inGame = ['play', 'dialog', 'choice'].includes(G.mode);
+    const inGame = ['play', 'dialog', 'choice', 'menu', 'chest'].includes(G.mode);
     ui.hud.style.display = inGame ? 'block' : 'none';
     ui.clockbox.style.display = inGame ? 'block' : 'none';
     el('hotbar').style.display = inGame ? 'flex' : 'none';
@@ -2347,7 +3354,9 @@
       const npc = G.map.npcs.find(n => n.x === fx && n.y === fy);
       const h = G.map.hot[fx + ',' + fy];
       let txt = null;
-      if (npc) txt = '[E] Talk to ' + npc.name;
+      if (G.carrying) txt = '[E] Place ' + ITEMS[G.carrying.id].name;
+      else if (npc) txt = '[E] Talk to ' + npc.name;
+      else if (placedAt(G.map.key, fx, fy)) txt = '[E] ' + ITEMS[placedAt(G.map.key, fx, fy).id].name;
       else if (h && h.action && h.label) txt = '[E] ' + h.label;
       else if (h && h.enter) {
         const b = WORLD.BUILDINGS.find(b => b.key === h.enter);
@@ -2413,12 +3422,14 @@
         alcDay: G.alcDay, alcToday: G.alcToday,
         lockerDay: G.lockerDay, mreDay: G.mreDay, cigDay: G.cigDay,
         deployEnd: G.deployEnd, extensions: G.extensions,
-        built: G.built, questStage: G.questStage, gather: G.gather,
+        built: G.built, questStage: G.questStage, gather: G.gather, junk: G.junk,
         callDay: G.callDay, movieDay: G.movieDay,
         duty: G.duty, sortieDay: G.sortieDay, photoDay: G.photoDay,
         morale: G.morale, moraleMaxed: G.moraleMaxed, crackdowns: G.crackdowns,
+        croc: G.croc,
         runNext: G.runNext, runLock: G.runLock, runsDone: G.runsDone, smugIntro: G.smugIntro,
-        attackAt: G.attackAt
+        attackAt: G.attackAt,
+        placed: G.placed, carrying: G.carrying
       }));
       upsertProfileMeta();
     } catch (e) {}
@@ -2445,7 +3456,10 @@
       if (s.inv.go) addItem('gopill', s.inv.go);
       if (s.inv.nogo) addItem('nogopill', s.inv.nogo);
     }
+    if (!G.bag.some(sl => sl && sl.id === 'hammer')) addItem('hammer', 1);   // tool migration
     G.bagSel = 0;
+    G.placed = Array.isArray(s.placed) ? s.placed : [];
+    G.carrying = s.carrying || null;
     G.groundItems = Array.isArray(s.groundItems) ? s.groundItems : [];
     if (!G.groundItems.length) spawnGroundItems();
     G.pillWeek = (s.pillWeek !== undefined) ? s.pillWeek : -1;
@@ -2455,18 +3469,20 @@
     G.lockerDay = s.lockerDay || 0; G.mreDay = s.mreDay || 0; G.cigDay = s.cigDay || 0;
     G.deployEnd = s.deployEnd || DEPLOY_DAYS; G.extensions = s.extensions || 0;
     G.built = s.built || {}; G.questStage = s.questStage || 0; G.gather = s.gather || {};
+    G.junk = s.junk || { day: 0, nodes: {} };
     G.callDay = s.callDay || 0; G.movieDay = s.movieDay || 0;
     G.duty = s.duty || null; G.sortieDay = s.sortieDay || 0;
     G.photoDay = s.photoDay || 0;
     G.morale = (s.morale !== undefined) ? s.morale : 40;
     G.moraleMaxed = !!s.moraleMaxed; G.moralePop = false; G.crackdowns = s.crackdowns || 0;
+    G.croc = s.croc || { fund: 0, stockDay: 0, intro: false, done: false };
     G.runNext = s.runNext || 0; G.runLock = s.runLock || 0;
     G.runsDone = s.runsDone || 0; G.smugIntro = !!s.smugIntro;
     G.haul = []; G.drive = null; G.gate = null; G.scene = null;
     G.attackAt = (s.attackAt !== undefined) ? s.attackAt : -1;
     G.alarm = null;
     updateHotbar();
-    player.frames = SPR.buildCharFrames(G.cfg);
+    refreshPlayerFrames();
     G.map = WORLD.get(s.mapKey);
     applyBuilds(G.map);
     applyBuilds(WORLD.get('exterior'));
@@ -2482,16 +3498,19 @@
     G.stats.hp = 100; G.stats.sp = 80; G.stats.en = 90; G.stats.hu = 20;
     G.day = 1; G.timeMin = 6 * 60; G.sorties = 0; G.hasMission = false;
     G.bag = new Array(12).fill(null); G.bagSel = 0;
+    addItem('hammer', 1);
     G.pillWeek = -1; G.goLeft = 5; G.nogoLeft = 5;
     G.alcDay = 0; G.alcToday = 0; G.lockerDay = 0; G.mreDay = 0; G.cigDay = 0;
     G.deployEnd = DEPLOY_DAYS; G.extensions = 0;
-    G.built = {}; G.questStage = 0; G.gather = {};
+    G.built = {}; G.questStage = 0; G.gather = {}; G.junk = { day: 0, nodes: {} };
     G.callDay = 0; G.movieDay = 0;
     G.duty = null; G.sortieDay = 0; G.photoDay = 0;
     G.morale = 40; G.moraleMaxed = false; G.moralePop = false; G.crackdowns = 0;
+    G.croc = { fund: 0, stockDay: 0, intro: false, done: false };
     G.runNext = 0; G.runLock = 0; G.runsDone = 0; G.smugIntro = false;
     G.haul = []; G.drive = null; G.gate = null; G.scene = null;
     G.attackAt = -1; G.alarm = null;
+    G.placed = []; G.carrying = null;
     if (!G.profileId) G.profileId = newProfileId();
     addItem('water', 1);
     addItem('seeds', 1);
@@ -2564,6 +3583,10 @@
       case 'roster':
         renderRoster();
         break;
+      case 'menu':
+      case 'chest':
+        renderPlay();     // world stays visible (and paused) behind the panel
+        break;
       case 'gameover':
         renderEnd(false);
         break;
@@ -2583,7 +3606,7 @@
 
   // debug/testing hook
   window.SANDBOX_DEBUG = {
-    G, player, ACTIONS,
+    G, player, ACTIONS, loop,
     say, ask, enterMap, startFlight, updateFlight, endFlight, doSleep,
     openCreator, deploy, cycleOpt, updateCreator,
     ITEMS, addItem, useSelected, spawnGroundItems, tryPickup, updateHotbar,
@@ -2592,6 +3615,11 @@
     gateArrival, startGate, updateGate, judgeGate, deliver, gateCaught, rollAttack,
     drawMarketScene, drawGateScene, renderScene, frame,
     openRoster, rosterKey, loadProfiles, loadGame, newGame, saveClear, updatePlay,
+    openMenu, closeMenu, menuKey, craftSel, RECIPES, PLACEABLES, craftList,
+    placeFromBag, placedMenu, placedAt, canPlaceAt, addToContainer,
+    theStand, customers, spawnCustomer, updateCustomers, custPath, stockStand,
+    setCustT(v) { custT = v; },
+    openChest, closeChest, chestKey, chestTransfer,
     teleport(mapKey, tx, ty) {
       G.map = WORLD.get(mapKey);
       player.tx = tx; player.ty = ty;

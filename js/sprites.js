@@ -18,27 +18,36 @@ const SPR = (() => {
   }
 
   /* ---------------- character sprites ----------------
-     16x16 pixel grids. Palette chars:
+     16x24 pixel grids (Stardew-style proportions). Palette chars:
      H hair   h long hair (female only)   S skin   E eye
      T top    A arms (skin when short-sleeved)
      P pants  B shoes   . transparent */
+  const CHAR_H = 24;
   const GRIDS = {
     dn_stand: [
       '................',
       '.....HHHHHH.....',
       '....HHHHHHHH....',
       '....HHHHHHHH....',
-      '....HSSSSSSH....',
+      '....HHSSSSHH....',
+      '...hHSSSSSSHh...',
       '...hHSESSESHh...',
+      '...hHSSSSSSHh...',
       '...h.SSSSSS.h...',
       '...h..SSSS..h...',
       '...hTTTTTTTTh...',
-      '...ATTTTTTTTA...',
-      '...STTTTTTTTS...',
-      '....TTTTTTTT....',
-      '.....PP..PP.....',
-      '.....PP..PP.....',
-      '.....BB..BB.....',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..SSTTTTTTTTSS..',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....BBBBBBBB....',
+      '....BBB..BBB....',
       '................'
     ],
     dn_step: [
@@ -46,17 +55,25 @@ const SPR = (() => {
       '.....HHHHHH.....',
       '....HHHHHHHH....',
       '....HHHHHHHH....',
-      '....HSSSSSSH....',
+      '....HHSSSSHH....',
+      '...hHSSSSSSHh...',
       '...hHSESSESHh...',
+      '...hHSSSSSSHh...',
       '...h.SSSSSS.h...',
       '...h..SSSS..h...',
       '...hTTTTTTTTh...',
-      '...ATTTTTTTTA...',
-      '...STTTTTTTTS...',
-      '....TTTTTTTT....',
-      '.....PP..PP.....',
-      '.....BB..PP.....',
-      '.........BB.....',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..SSTTTTTTTTSS..',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPP.PPPP....',
+      '....BBB..PPP....',
+      '.........PPP....',
+      '.........BBB....',
+      '.........BBB....',
       '................'
     ],
     up_stand: [
@@ -66,15 +83,23 @@ const SPR = (() => {
       '....HHHHHHHH....',
       '....HHHHHHHH....',
       '...hHHHHHHHHh...',
+      '...hHHHHHHHHh...',
+      '...hHHHHHHHHh...',
       '...h.HHHHHH.h...',
       '...h..SSSS..h...',
       '...hTTTTTTTTh...',
-      '...ATTTTTTTTA...',
-      '...STTTTTTTTS...',
-      '....TTTTTTTT....',
-      '.....PP..PP.....',
-      '.....PP..PP.....',
-      '.....BB..BB.....',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..SSTTTTTTTTSS..',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....BBBBBBBB....',
+      '....BBB..BBB....',
       '................'
     ],
     up_step: [
@@ -84,15 +109,23 @@ const SPR = (() => {
       '....HHHHHHHH....',
       '....HHHHHHHH....',
       '...hHHHHHHHHh...',
+      '...hHHHHHHHHh...',
+      '...hHHHHHHHHh...',
       '...h.HHHHHH.h...',
       '...h..SSSS..h...',
       '...hTTTTTTTTh...',
-      '...ATTTTTTTTA...',
-      '...STTTTTTTTS...',
-      '....TTTTTTTT....',
-      '.....PP..PP.....',
-      '.....BB..PP.....',
-      '.........BB.....',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..AATTTTTTTTAA..',
+      '..SSTTTTTTTTSS..',
+      '....PPPPPPPP....',
+      '....PPPPPPPP....',
+      '....PPP.PPPP....',
+      '....BBB..PPP....',
+      '.........PPP....',
+      '.........BBB....',
+      '.........BBB....',
       '................'
     ],
     lf_stand: [
@@ -100,17 +133,25 @@ const SPR = (() => {
       '.....HHHHHH.....',
       '....HHHHHHHH....',
       '....HHHHHHHH....',
-      '....SSSSHHHH....',
-      '....SESSHHHH....',
-      '.....SSSHHHh....',
+      '....HSSSHHHH....',
+      '....SSSSSHHHh...',
+      '....SESSSHHHh...',
+      '....SSSSSHHHh...',
+      '.....SSSSHHh....',
       '......SSSS.h....',
       '....TTTTTTTTh...',
-      '...ATTTTTTTT....',
-      '...STTTTTTTT....',
-      '....TTTTTTTT....',
-      '......PPPP......',
-      '......PPPP......',
-      '......BBBB......',
+      '....AATTTTTTh...',
+      '....AATTTTTT....',
+      '....AATTTTTT....',
+      '....AATTTTTT....',
+      '....SSTTTTTT....',
+      '.....PPPPPP.....',
+      '.....PPPPPP.....',
+      '.....PPPPPP.....',
+      '.....PPPPPP.....',
+      '.....PPPPPP.....',
+      '.....BBBBB......',
+      '....BBBBB.......',
       '................'
     ],
     lf_step: [
@@ -118,29 +159,49 @@ const SPR = (() => {
       '.....HHHHHH.....',
       '....HHHHHHHH....',
       '....HHHHHHHH....',
-      '....SSSSHHHH....',
-      '....SESSHHHH....',
-      '.....SSSHHHh....',
+      '....HSSSHHHH....',
+      '....SSSSSHHHh...',
+      '....SESSSHHHh...',
+      '....SSSSSHHHh...',
+      '.....SSSSHHh....',
       '......SSSS.h....',
       '....TTTTTTTTh...',
-      '...ATTTTTTTT....',
-      '...STTTTTTTT....',
-      '....TTTTTTTT....',
-      '......PPPP......',
-      '.....PP..PP.....',
-      '....BB....BB....',
+      '....AATTTTTTh...',
+      '....AATTTTTT....',
+      '....AATTTTTT....',
+      '....AATTTTTT....',
+      '....SSTTTTTT....',
+      '.....PPPPPP.....',
+      '.....PPPPPP.....',
+      '....PPP.PPP.....',
+      '....PPP..PPP....',
+      '...PPP....PPP...',
+      '...BBB....BBB...',
+      '................',
       '................'
     ]
   };
 
+  // darken a hex color (arms are a shaded tone of the top so they read against the torso)
+  function shade(hex, f) {
+    return '#' + [1, 3, 5].map(i =>
+      Math.round(parseInt(hex.slice(i, i + 2), 16) * f).toString(16).padStart(2, '0')).join('');
+  }
+
   // NPCs still use fixed palettes through the same grid system
   const PAL = {
-    player:  { H: '#3a2a18', S: '#e0ac7e', E: '#1a1a1a', T: '#b49a66', A: '#b49a66', P: '#b49a66', B: '#33291f' },
-    officer: { H: '#55504a', S: '#d8a374', E: '#1a1a1a', T: '#8a7a55', A: '#8a7a55', P: '#8a7a55', B: '#33291f' },
-    cook:    { H: '#2a2a2a', S: '#b57c52', E: '#1a1a1a', T: '#c9c9c9', A: '#c9c9c9', P: '#c9c9c9', B: '#33291f' },
-    chief:   { H: '#7a4a20', S: '#e8bd93', E: '#1a1a1a', T: '#6b5a3f', A: '#6b5a3f', P: '#6b5a3f', B: '#33291f' },
-    doc:     { H: '#9a9aa0', S: '#d8a374', E: '#1a1a1a', T: '#7fb0a8', A: '#7fb0a8', P: '#5f8a82', B: '#33291f' },
-    hard:    { H: '#14100c', S: '#c98a5a', E: '#1a1a1a', T: '#b49a66', A: '#b49a66', P: '#b49a66', B: '#33291f' }
+    player:  { H: '#3a2a18', S: '#e0ac7e', E: '#1a1a1a', T: '#b49a66', A: shade('#b49a66', 0.78), P: '#b49a66', B: '#33291f' },
+    officer: { H: '#55504a', S: '#d8a374', E: '#1a1a1a', T: '#8a7a55', A: shade('#8a7a55', 0.78), P: '#8a7a55', B: '#33291f' },
+    cook:    { H: '#2a2a2a', S: '#b57c52', E: '#1a1a1a', T: '#c9c9c9', A: shade('#c9c9c9', 0.78), P: '#c9c9c9', B: '#33291f' },
+    chief:   { H: '#7a4a20', S: '#e8bd93', E: '#1a1a1a', T: '#6b5a3f', A: shade('#6b5a3f', 0.78), P: '#6b5a3f', B: '#33291f' },
+    doc:     { H: '#9a9aa0', S: '#d8a374', E: '#1a1a1a', T: '#7fb0a8', A: shade('#7fb0a8', 0.78), P: '#5f8a82', B: '#33291f' },
+    hard:    { H: '#14100c', S: '#c98a5a', E: '#1a1a1a', T: '#b49a66', A: shade('#b49a66', 0.78), P: '#b49a66', B: '#33291f' },
+    croc:    { H: '#1a1512', S: '#b57c52', E: '#1a1a1a', T: '#b49a66', A: shade('#b49a66', 0.78), P: '#b49a66', B: '#33291f' },
+    // coffee stand customers
+    crew:    { H: '#2a2a2a', S: '#d8a374', E: '#1a1a1a', T: '#5f7040', A: shade('#5f7040', 0.78), P: '#5f7040', B: '#33291f' },
+    guard:   { H: '#4a3320', S: '#e0ac7e', E: '#1a1a1a', T: '#5a6470', A: shade('#5a6470', 0.78), P: '#5a6470', B: '#26282c' },
+    contractor: { H: '#9a9aa0', S: '#d8a374', E: '#1a1a1a', T: '#c9a35a', A: shade('#c9a35a', 0.78), P: '#8a8a90', B: '#33291f' },
+    maint:   { H: '#1e1a16', S: '#b57c52', E: '#1a1a1a', T: '#6a7178', A: shade('#6a7178', 0.78), P: '#6a7178', B: '#26282c' }
   };
 
   /* ---------------- customization options ---------------- */
@@ -170,7 +231,7 @@ const SPR = (() => {
   }
 
   function drawGrid(rows, pal) {
-    const c = cv(16, 16), x = c.getContext('2d');
+    const c = cv(16, rows.length), x = c.getContext('2d');
     rows.forEach((r, y) => {
       for (let i = 0; i < 16; i++) {
         const ch = r[i];
@@ -183,26 +244,79 @@ const SPR = (() => {
     return c;
   }
 
-  // hat / outfit details drawn on top of the finished frame
+  /* ---------------- polish: outline + top-light + bottom-shade ----------------
+     One consistent Stardew-style pass applied to every generated sprite:
+     silhouette edges darken toward a hue-shifted outline, the row under a
+     top edge gets a warm highlight, the row above a bottom edge cools off. */
+  function polish(c) {
+    const w = c.width, h = c.height;
+    const x = c.getContext('2d');
+    const img = x.getImageData(0, 0, w, h);
+    const d = img.data;
+    const alphaAt = (i, j) => (i < 0 || j < 0 || i >= w || j >= h) ? 0 : d[(j * w + i) * 4 + 3];
+    const edge = new Uint8Array(w * h);
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const k = j * w + i;
+        if (d[k * 4 + 3] > 0 &&
+            (alphaAt(i - 1, j) === 0 || alphaAt(i + 1, j) === 0 ||
+             alphaAt(i, j - 1) === 0 || alphaAt(i, j + 1) === 0)) edge[k] = 1;
+      }
+    }
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const k = j * w + i, p = k * 4;
+        if (d[p + 3] === 0) continue;
+        if (edge[k]) {
+          // 1px-wide features (arms, hands, posts) keep their color — light touch only
+          const thin = (alphaAt(i - 1, j) === 0 && alphaAt(i + 1, j) === 0) ||
+                       (alphaAt(i, j - 1) === 0 && alphaAt(i, j + 1) === 0);
+          const mix = thin ? 0.22 : 0.55;
+          d[p]     = (d[p]     * (1 - mix) + 32 * mix) | 0;
+          d[p + 1] = (d[p + 1] * (1 - mix) + 26 * mix) | 0;
+          d[p + 2] = (d[p + 2] * (1 - mix) + 38 * mix) | 0;
+        } else if (j > 0 && edge[k - w]) {      // warm top light
+          d[p]     = Math.min(255, (d[p]     * 0.75 + 255 * 0.25) | 0);
+          d[p + 1] = Math.min(255, (d[p + 1] * 0.75 + 238 * 0.25) | 0);
+          d[p + 2] = Math.min(255, (d[p + 2] * 0.75 + 185 * 0.25) | 0);
+        } else if (j < h - 1 && edge[k + w]) {  // cool bottom shade
+          d[p]     = (d[p]     * 0.8 + 40 * 0.2) | 0;
+          d[p + 1] = (d[p + 1] * 0.8 + 42 * 0.2) | 0;
+          d[p + 2] = (d[p + 2] * 0.8 + 82 * 0.2) | 0;
+        }
+      }
+    }
+    x.putImageData(img, 0, 0);
+    return c;
+  }
+
+  // render a draw-function into a polished, cached-by-caller canvas
+  function spriteCanvas(w, h, fn) {
+    const c = cv(w, h);
+    fn(c.getContext('2d'), 0, 0);
+    return polish(c);
+  }
+
+  // hat / outfit details drawn on top of the finished frame (16x24 body)
   function decorator(cfg) {
     const o = OUTFITS[cfg.outfit];
     return (c, dir) => {
       const x = c.getContext('2d');
       if (o.zip && dir === 'down') {
         x.fillStyle = '#8a744e';
-        x.fillRect(7, 8, 1, 3);
+        x.fillRect(7, 10, 1, 5);
         x.fillStyle = '#5a4a30';
-        x.fillRect(7, 8, 1, 1);
+        x.fillRect(7, 10, 1, 1);
       }
       if (o.hood) {
         x.fillStyle = '#55555c';
-        x.fillRect(5, 7, 6, 1);
-        x.fillRect(4, 8, 1, 1);
-        x.fillRect(11, 8, 1, 1);
+        x.fillRect(5, 9, 6, 1);
+        x.fillRect(4, 10, 1, 1);
+        x.fillRect(11, 10, 1, 1);
         if (dir === 'down') {
           x.fillStyle = '#d8d8d8';
-          x.fillRect(6, 9, 1, 1);
-          x.fillRect(9, 9, 1, 1);
+          x.fillRect(6, 11, 1, 1);
+          x.fillRect(9, 11, 1, 1);
         }
       }
       if (cfg.hat === 1) {           // black watchcap beanie
@@ -227,7 +341,7 @@ const SPR = (() => {
     const mk = (rows, dir) => {
       const c = drawGrid(rows, pal);
       if (dec) dec(c, dir);
-      return c;
+      return polish(c);
     };
     const dnS = mk(GRIDS.dn_stand, 'down'), dn1 = mk(GRIDS.dn_step, 'down'), dn2 = mk(mirror(GRIDS.dn_step), 'down');
     const upS = mk(GRIDS.up_stand, 'up'),   up1 = mk(GRIDS.up_step, 'up'),   up2 = mk(mirror(GRIDS.up_step), 'up');
@@ -257,7 +371,7 @@ const SPR = (() => {
       h: cfg.sex === 1 ? hair : null,
       S: skin, E: '#1a1a1a',
       T: o.T, P: o.P,
-      A: o.A === 'skin' ? skin : o.A,
+      A: o.A === 'skin' ? skin : shade(o.A, 0.78),   // arms: shaded sleeve tone
       B: SHOES[cfg.shoes][1]
     };
     return assembleFrames(pal, decorator(cfg));
@@ -265,6 +379,12 @@ const SPR = (() => {
 
   /* ---------------- terrain tiles ---------------- */
   function tile(ctx, id, px, py, tx, ty) {
+    // asset override (assets.js): PNG tile strips beat the procedural draws
+    if (typeof ASSETS !== 'undefined' && ASSETS.tiles && ASSETS.tiles[id]) {
+      const v = ASSETS.tiles[id];
+      ctx.drawImage(v[(rnd(tx * 61 + ty * 173) * v.length) | 0], px, py);
+      return;
+    }
     const seed = tx * 61 + ty * 173;
     switch (id) {
       case 'sand': {
@@ -618,11 +738,62 @@ const SPR = (() => {
       [2, 9, 3, 2, '#6a7178'],
       [11, 9, 3, 2, '#6a7178']
     ],
+    coffeestand: [
+      [1, 1, 14, 3, '#e8e0c8'],      // awning base
+      [1, 1, 2, 3, '#c23b2a'],       // red stripes
+      [5, 1, 2, 3, '#c23b2a'],
+      [9, 1, 2, 3, '#c23b2a'],
+      [13, 1, 2, 3, '#c23b2a'],
+      [1, 4, 14, 1, '#8a3a2a'],      // awning edge
+      [1, 5, 1, 8, '#7a5a30'],       // posts
+      [14, 5, 1, 8, '#7a5a30'],
+      [4, 6, 3, 3, '#33353a'],       // coffee pot
+      [5, 5, 1, 1, '#9aa2aa'],
+      [9, 7, 2, 2, '#e8e0c8'],       // cup
+      [1, 9, 14, 5, '#8a6a38'],      // counter
+      [1, 9, 14, 1, '#a8895a'],
+      [1, 13, 14, 1, '#4f3819']
+    ],
     bench: [
       [1, 6, 14, 4, '#a8895a'],
       [1, 6, 14, 1, '#c9a86a'],
       [2, 10, 2, 4, '#7d6540'],
       [12, 10, 2, 4, '#7d6540']
+    ],
+    chest: [
+      [2, 4, 12, 10, '#8a6a38'],
+      [2, 4, 12, 4, '#a8895a'],
+      [2, 8, 12, 1, '#5a4530'],
+      [2, 4, 1, 10, '#5a4530'],
+      [13, 4, 1, 10, '#5a4530'],
+      [7, 8, 2, 3, '#c9cdd4'],
+      [2, 13, 12, 1, '#4f3819']
+    ],
+    footlocker: [
+      [1, 5, 14, 9, '#5f7040'],
+      [1, 5, 14, 3, '#6f8050'],
+      [1, 8, 14, 1, '#3f4c2c'],
+      [3, 9, 2, 3, '#9aa2aa'],
+      [11, 9, 2, 3, '#9aa2aa'],
+      [5, 6, 6, 1, '#e8e0c8'],
+      [1, 13, 14, 1, '#33402a']
+    ],
+    sign: [
+      [7, 8, 2, 7, '#7a5a30'],
+      [2, 2, 12, 7, '#a8895a'],
+      [3, 3, 10, 5, '#8a6a38'],
+      [4, 4, 8, 1, '#e8e0c8'],
+      [4, 6, 6, 1, '#e8e0c8'],
+      [2, 2, 12, 1, '#c9a86a']
+    ],
+    chair: [
+      [3, 2, 10, 7, '#3a6b4f'],
+      [4, 3, 8, 5, '#4f7a5f'],
+      [3, 9, 10, 3, '#3a6b4f'],
+      [2, 12, 2, 4, '#33353a'],
+      [12, 12, 2, 4, '#33353a'],
+      [3, 9, 1, 4, '#26282c'],
+      [12, 9, 1, 4, '#26282c']
     ],
     bed: [
       [2, 0, 12, 16, '#54452f'],
@@ -659,18 +830,45 @@ const SPR = (() => {
 
   const furnCache = {};
   function furn(name) {
+    // asset override (assets.js): PNG furniture beats the procedural draws
+    if (typeof ASSETS !== 'undefined' && ASSETS.furn && ASSETS.furn[name]) return ASSETS.furn[name];
     if (furnCache[name]) return furnCache[name];
     const c = cv(16, 16), x = c.getContext('2d');
     (FURN_DEFS[name] || []).forEach(r => {
       x.fillStyle = r[4];
       x.fillRect(r[0], r[1], r[2], r[3]);
     });
-    furnCache[name] = c;
-    return c;
+    furnCache[name] = polish(c);
+    return furnCache[name];
   }
 
   /* ---------------- item icons (16x16 rect sprites) ---------------- */
   const ITEM_DEFS = {
+    hammer: [
+      [3, 10, 8, 2, '#966a3c'],       // handle
+      [9, 3, 5, 6, '#a8aeb6'],        // head
+      [9, 3, 2, 2, '#d2d8e0'],        // shine
+      [12, 8, 2, 1, '#787e86'],       // claw
+      [3, 13, 10, 1, 'rgba(0,0,0,0.25)']
+    ],
+    coffeestand: [
+      [2, 2, 12, 3, '#c23b2a'],
+      [4, 2, 2, 3, '#e8e0c8'],
+      [8, 2, 2, 3, '#e8e0c8'],
+      [12, 2, 2, 3, '#e8e0c8'],
+      [2, 5, 1, 7, '#7a5a30'],
+      [13, 5, 1, 7, '#7a5a30'],
+      [2, 8, 12, 5, '#8a6a38'],
+      [2, 8, 12, 1, '#a8895a'],
+      [3, 13, 10, 1, 'rgba(0,0,0,0.25)']
+    ],
+    coffee: [
+      [5, 3, 6, 10, '#6d4f28'],
+      [5, 3, 6, 2, '#4f3819'],
+      [6, 7, 4, 4, '#e8dcc0'],
+      [7, 8, 2, 2, '#7a4a20'],
+      [4, 13, 9, 1, 'rgba(0,0,0,0.25)']
+    ],
     gopill: [
       [3, 6, 5, 4, '#f2f2f2'],
       [8, 6, 5, 4, '#d84a4a'],
@@ -788,12 +986,13 @@ const SPR = (() => {
   function item(id) {
     if (itemCache[id]) return itemCache[id];
     const c = cv(16, 16), x = c.getContext('2d');
-    (ITEM_DEFS[id] || []).forEach(r => {
+    // placeables (chest, sign, ...) reuse their furniture sprite as the icon
+    (ITEM_DEFS[id] || FURN_DEFS[id] || []).forEach(r => {
       x.fillStyle = r[4];
       x.fillRect(r[0], r[1], r[2], r[3]);
     });
-    itemCache[id] = c;
-    return c;
+    itemCache[id] = polish(c);
+    return itemCache[id];
   }
 
   /* ---------------- decor: palm tree (16x16) ---------------- */
@@ -964,7 +1163,8 @@ const SPR = (() => {
   }
 
   return {
-    T, cv, rnd, PAL, charFrames, buildCharFrames,
+    T, cv, rnd, PAL, charFrames, buildCharFrames, CHAR_H,
+    polish, spriteCanvas,
     SEXES, HAIRS, OUTFITS, SHOES, HATS,
     tile, furn, item, drawTree, drawJet, drawJetSide, drawBunker,
     drawTruckTop, drawJingleTruck, drawGoat

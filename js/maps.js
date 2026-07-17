@@ -16,7 +16,9 @@ const WORLD = (() => {
     // RLB village — east side communal living area
     { key: 'rlb',     name: 'RLB',     x: 48, y: 6,  w: 5,  h: 4 },
     { key: 'rlb2',    name: 'RLB',     x: 48, y: 11, w: 5,  h: 4, locked: true },
-    { key: 'rlb3',    name: 'RLB',     x: 48, y: 16, w: 5,  h: 4, locked: true }
+    { key: 'rlb3',    name: 'RLB',     x: 48, y: 16, w: 5,  h: 4, locked: true },
+    // fenced salvage compound — gate teleports into the junkyard map
+    { key: 'junkyard', name: 'JUNKYARD', x: 47, y: 1, w: 8, h: 4, yard: true }
   ];
   const BUNKER = { x: 48, y: 22, w: 4, h: 3 };
 
@@ -28,7 +30,8 @@ const WORLD = (() => {
   const COMMON_LEGEND = {
     w: { tile: 'iwall', solid: true },
     f: { tile: 'floor' },
-    d: { tile: 'door_in', exit: true }
+    d: { tile: 'door_in', exit: true },
+    g: { tile: 'floor', furn: 'rug' }        // walkable rug anchor (48x32 art)
   };
 
   const INTERIORS = {
@@ -54,7 +57,8 @@ const WORLD = (() => {
         v: { tile: 'floor', furn: 'vaultdoor', solid: true, action: 'vault', label: 'The Vault' }
       },
       npcs: [
-        { x: 3, y: 2, pal: 'officer', name: 'RHINO', dir: 'down', action: 'briefing' }
+        { x: 3, y: 2, pal: 'officer', name: 'RHINO', dir: 'down', action: 'briefing' },
+        { x: 10, y: 5, pal: 'croc', name: 'CROC', dir: 'down', action: 'crocTalk' }
       ]
     },
     dfac: {
@@ -66,7 +70,7 @@ const WORLD = (() => {
         'wffffffffffffw',
         'wfttffttffttfw',
         'wfttffttffttfw',
-        'wffffffffffffw',
+        'wfffffgffffffw',
         'wfttffttffttfw',
         'wffffffffffffw',
         'wwwwwwddwwwwww'
@@ -77,7 +81,7 @@ const WORLD = (() => {
         t: { tile: 'floor', furn: 'table',    solid: true, action: 'table',  label: 'Table' }
       },
       npcs: [
-        { x: 3, y: 1, pal: 'cook', name: 'SGT Cole', dir: 'down', action: 'cookTalk' }
+        { x: 3, y: 1, pal: 'cook', name: 'Cheesy Habibi', dir: 'down', action: 'cookTalk' }
       ]
     },
     gym: {
@@ -103,21 +107,24 @@ const WORLD = (() => {
       name: 'MWR SHACK',
       grid: [
         'wwwwwwwwwwwwww',
-        'wVVfnfffFcfcfw',
-        'wUUffffffcfcfw',
+        'wVxfnfffFcfcfw',
+        'wUyffffffcfcfw',
         'wffffffffffffw',
-        'wffGGffffffffw',
-        'wffGGffffffffw',
-        'wffffffffffffw',
+        'wffGzffffffffw',
+        'wffzzffffffffw',
+        'wffffffgfffffw',
         'wffffffffffffw',
         'wffffffffffffw',
         'wwwwwwddwwwwww'
       ],
       legend: {
         V: { tile: 'floor', furn: 'tv',       solid: true, action: 'tv',         label: 'TV' },
+        x: { tile: 'floor',                   solid: true, action: 'tv',         label: 'TV' },
         U: { tile: 'floor', furn: 'couch',    solid: true, action: 'tv',         label: 'Couch' },
+        y: { tile: 'floor',                   solid: true, action: 'tv',         label: 'Couch' },
         n: { tile: 'floor', furn: 'mapboard', solid: true, action: 'buildBoard', label: 'Build Board' },
         G: { tile: 'floor', furn: 'foosball', solid: true, action: 'foosball',   label: 'Foosball' },
+        z: { tile: 'floor',                   solid: true, action: 'foosball',   label: 'Foosball' },
         F: { tile: 'floor', furn: 'cooler',   solid: true, action: 'mwrFridge',  label: 'MWR Fridge' },
         c: { tile: 'floor', furn: 'cot',      solid: true, action: 'sleep',      label: 'Cot' }
       },
@@ -201,6 +208,28 @@ const WORLD = (() => {
         H: { tile: 'floor', furn: 'shower', solid: true, action: 'shower', label: 'Shower' }
       },
       npcs: []
+    },
+    junkyard: {
+      name: 'JUNKYARD',
+      grid: [
+        'wwwwwwwwwwwwwwww',
+        'wssPssJsssssMssw',
+        'wssssssssssssssw',
+        'wPssMsssssJssPsw',
+        'wssssssssssssssw',
+        'wssJsssPssMssJsw',
+        'wssssssssssssssw',
+        'wwwwwwwdwwwwwwww'
+      ],
+      legend: {
+        w: { tile: 'hesco', solid: true },
+        s: { tile: 'sand' },
+        d: { tile: 'sand', exit: true },
+        P: { tile: 'sand', furn: 'palletstack', solid: true, action: 'salvage', label: 'Pallet Stack', spot: 'pallet' },
+        J: { tile: 'sand', furn: 'junkpile',    solid: true, action: 'salvage', label: 'Junk Pile',    spot: 'junk' },
+        M: { tile: 'sand', furn: 'machine',     solid: true, action: 'salvage', label: 'Old Machine',  spot: 'machine' }
+      },
+      npcs: []
     }
   };
 
@@ -213,7 +242,7 @@ const WORLD = (() => {
   const TREES = [
     [2, 11], [15, 12], [27, 11], [44, 13],
     [2, 24], [13, 28], [26, 28], [35, 28], [45, 24], [20, 28],
-    [46, 5], [46, 20], [54, 9], [54, 26]
+    [46, 20], [54, 9], [54, 26]
   ];
   const HESCO_CLUSTERS = [
     [26, 14], [26, 15], [43, 21], [2, 20], [2, 21], [45, 15],
@@ -259,6 +288,15 @@ const WORLD = (() => {
     // buildings
     BUILDINGS.forEach(b => {
       const door = doorOf(b);
+      if (b.yard) {              // hesco-fenced yard with a gate, no roof
+        for (let y = b.y; y < b.y + b.h; y++)
+          for (let x = b.x; x < b.x + b.w; x++)
+            if (y === b.y || y === b.y + b.h - 1 || x === b.x || x === b.x + b.w - 1)
+              setT(x, y, 'hesco', true);
+        setT(door.x, door.y, 'sand', false);
+        hot[door.x + ',' + door.y] = { enter: b.key };
+        return;
+      }
       for (let y = b.y; y < b.y + b.h; y++) {
         for (let x = b.x; x < b.x + b.w; x++) {
           if (y === b.y + b.h - 1) {
@@ -317,10 +355,45 @@ const WORLD = (() => {
     const ctx = canvas.getContext('2d');
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++) SPR.tile(ctx, tiles[y][x], x * T, y * T, x, y);
-    TREES.forEach(([x, y]) => SPR.drawTree(ctx, x * T, y * T));
-    JETS.forEach(j => SPR.drawJet(ctx, j.x * T, j.y * T));
+
+    // soften sand→pavement seams with a ragged sand fringe
+    const paved = id => id === 'tarmac' || id === 'stripe';
+    const FRINGE = ['#d7b271', '#c6a05e', '#e2c088'];
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        if (tiles[y][x] !== 'sand') continue;
+        const px = x * T, py = y * T;
+        const r = i => SPR.rnd(x * 91 + y * 57 + i);
+        if (x + 1 < w && paved(tiles[y][x + 1]))
+          for (let i = 0; i < T; i++) if (r(i) > 0.35) {
+            ctx.fillStyle = FRINGE[(r(i + 20) * 3) | 0];
+            ctx.fillRect(px + T, py + i, 1 + ((r(i + 40) * 2) | 0), 1);
+          }
+        if (x > 0 && paved(tiles[y][x - 1]))
+          for (let i = 0; i < T; i++) if (r(i + 60) > 0.35) {
+            const len = 1 + ((r(i + 80) * 2) | 0);
+            ctx.fillStyle = FRINGE[(r(i + 70) * 3) | 0];
+            ctx.fillRect(px - len, py + i, len, 1);
+          }
+        if (y + 1 < h && paved(tiles[y + 1][x]))
+          for (let i = 0; i < T; i++) if (r(i + 100) > 0.35) {
+            ctx.fillStyle = FRINGE[(r(i + 120) * 3) | 0];
+            ctx.fillRect(px + i, py + T, 1, 1 + ((r(i + 140) * 2) | 0));
+          }
+        if (y > 0 && paved(tiles[y - 1][x]))
+          for (let i = 0; i < T; i++) if (r(i + 160) > 0.35) {
+            const len = 1 + ((r(i + 180) * 2) | 0);
+            ctx.fillStyle = FRINGE[(r(i + 170) * 3) | 0];
+            ctx.fillRect(px + i, py - len, 1, len);
+          }
+      }
+    const treeSpr = SPR.spriteCanvas(16, 16, SPR.drawTree);
+    const jetSpr = SPR.spriteCanvas(64, 48, SPR.drawJet);
+    const bunkerSpr = SPR.spriteCanvas(64, 48, SPR.drawBunker);
+    TREES.forEach(([x, y]) => ctx.drawImage(treeSpr, x * T, y * T));
+    JETS.forEach(j => ctx.drawImage(jetSpr, j.x * T, j.y * T));
     GATHER_SPOTS.forEach(g => ctx.drawImage(SPR.furn(g.furn), g.x * T, g.y * T));
-    SPR.drawBunker(ctx, BUNKER.x * T, BUNKER.y * T);
+    ctx.drawImage(bunkerSpr, BUNKER.x * T, BUNKER.y * T);
     // roof name stencils
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'center';
@@ -384,6 +457,10 @@ const WORLD = (() => {
     if (!cache[key]) cache[key] = key === 'exterior' ? buildExterior() : buildInterior(key);
     return cache[key];
   }
+  // drop prerendered maps so they rebuild with newly loaded tile assets
+  function invalidate() {
+    Object.keys(cache).forEach(k => delete cache[k]);
+  }
 
-  return { get, BUILDINGS, doorOf };
+  return { get, invalidate, BUILDINGS, doorOf, TREES, JETS };
 })();
