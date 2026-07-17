@@ -37,6 +37,31 @@
     <div id="dmore">&#9660;</div>
   </div>
 
+  <div id="menu">
+    <div id="mbox">
+      <div id="mtabs">
+        <span class="mtab" data-tab="0">GEAR</span><span class="mtab" data-tab="1">BAG</span><span class="mtab" data-tab="2">CRAFT</span>
+      </div>
+      <div id="mgear" class="mpanel">
+        <div id="mpvwrap"><canvas id="mpreview" width="16" height="24"></canvas></div>
+        <div id="mgearlist"></div>
+      </div>
+      <div id="mbag" class="mpanel"><div id="mbaglist"></div></div>
+      <div id="mcraft" class="mpanel"><div id="mcraftlist"></div></div>
+      <div id="mhint"></div>
+    </div>
+  </div>
+
+  <div id="chestui">
+    <div id="cbox2">
+      <div class="clabel2" id="chestname">STORAGE</div>
+      <div id="chestslots" class="slotrow"></div>
+      <div class="clabel2">YOUR BAG</div>
+      <div id="bagslots" class="slotrow"></div>
+      <div id="chint2">&#8592;&#8594; SELECT &nbsp; &#8593;&#8595; SWITCH &nbsp; ENTER TRANSFER &nbsp; ESC CLOSE</div>
+    </div>
+  </div>
+
   <div id="creator">
     <div id="cbox">
       <h1>PILOT RECORD</h1>
@@ -71,7 +96,7 @@
             <button class="arr" data-d="-1">&#9664;</button><span class="cval" id="v-hat"></span><button class="arr" data-d="1">&#9654;</button>
           </div>
         </div>
-        <div id="pvwrap"><canvas id="preview" width="16" height="16"></canvas></div>
+        <div id="pvwrap"><canvas id="preview" width="16" height="24"></canvas></div>
       </div>
       <div class="crow deploy" data-row="7" id="deployrow">&#9658; DEPLOY</div>
       <div id="chint">ARROWS — NAVIGATE &amp; CHANGE &nbsp;&nbsp; ENTER — DEPLOY</div>
@@ -80,6 +105,7 @@
 </div>
 
 <script src="js/sprites.js"></script>
+<script src="js/assets.js"></script>
 <script src="js/maps.js"></script>
 <script src="js/game.js"></script>
 </body>
